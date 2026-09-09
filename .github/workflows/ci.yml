@@ -1,0 +1,73 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    # gisc was built on Windows and had never run anywhere else. Linux is here
+    # to catch the path and encoding assumptions that only show up off Windows,
+    # and 3.12 to hold the >=3.11 claim in pyproject to something real.
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python: ["3.11", "3.12"]
+    runs-on: ${{ matrix.os }}
+    name: ${{ matrix.os }} / py${{ matrix.python }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]" pytest-cov
+
+      - name: Test
+        run: pytest -q --cov=gisc --cov-report=term-missing
+
+      - name: The one command in the README must work
+        shell: bash
+        run: |
+          gisc compile corridor.conflicts \
+            --alignment fixtures/alignment.xml \
+            --utils fixtures/utilities.geojson \
+            --flood fixtures/flood.geojson \
+            --buffer-ft 15 --crs EPSG:3857 --out ./out/ci
+          for f in plan.json conflicts.geojson flood.geojson summary.md provenance.json; do
+            test -s "./out/ci/$f" || { echo "missing or empty: $f"; exit 1; }
+          done
+
+      - name: A stubbed adapter must fail honestly, not silently
+        shell: bash
+        run: |
+          set +e
+          gisc compile corridor.conflicts \
+            --alignment fixtures/alignment.xml \
+            --utils "postgresql://gis@db.example.org:5432/city?layer=util.water" \
+            --out ./out/stub
+          code=$?
+          set -e
+          test "$code" = "5" || { echo "expected exit 5, got $code"; exit 1; }
+
+      - name: A missing CRS must exit non-zero and name the file
+        shell: bash
+        run: |
+          set +e
+          out=$(gisc compile corridor.conflicts \
+            --alignment fixtures/alignment.xml \
+            --utils fixtures/utilities_nocrs.gpkg \
+            --out ./out/nocrs 2>&1)
+          code=$?
+          set -e
+          test "$code" = "3" || { echo "expected exit 3, got $code"; exit 1; }
+          echo "$out" | grep -q "utilities_nocrs.gpkg" || { echo "message did not name the file"; exit 1; }
