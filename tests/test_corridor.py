@@ -517,3 +517,32 @@ def test_plan_paths_are_portable(tmp_path):
         if op["op"] == "write":
             assert "\\" not in op["to"], op["to"]
     assert all("\\" not in v for v in plan["outputs"].values())
+
+
+def test_station_label_rounds_before_splitting():
+    """1199.9999 must print 12+00.00, never 11+100.00."""
+    from gisc.exec import _station_label
+
+    assert _station_label(1200.0) == "12+00.00"
+    assert _station_label(1199.99999) == "12+00.00"
+    assert _station_label(1199.994) == "11+99.99"
+    assert _station_label(0.0) == "0+00.00"
+    assert _station_label(1234.56) == "12+34.56"
+    assert _station_label(-50.0) == "-0+50.00"
+    assert _station_label(None) is None
+
+
+def test_overlap_is_geodesic_so_the_analysis_crs_does_not_move_it(tmp_path):
+    """How much pipe is in the corridor is a ground fact, not a projection artefact."""
+    web = execute(_compile(tmp_path / "w", crs="EPSG:3857"), tmp_path / "w")
+    sp = execute(_compile(tmp_path / "s", crs="EPSG:2264"), tmp_path / "s")
+
+    w = web.frame("conflicts").set_index("name")
+    s = sp.frame("conflicts").set_index("name")
+
+    # The 250 ft parallel run measures the same either way, and matches design.
+    assert w.loc["SS-12IN", "overlap_ft"] == pytest.approx(250.03, abs=0.05)
+    assert w.loc["SS-12IN", "overlap_ft"] == pytest.approx(s.loc["SS-12IN", "overlap_ft"],
+                                                           abs=0.05)
+    # Stationing is identical, not merely close.
+    assert list(w["sta_label"]) == list(s["sta_label"])

@@ -124,18 +124,18 @@ def _op_intersect(op, plan, env, prov, ctx):
     # Geometry is the source geometry, unclipped: the answer to "which pipe"
     # is the whole pipe. How much of it is inside is an attribute.
     if len(hits):
-        inside = list(hits.geometry.intersection(mask))
-        k = (ctx.get("buffer") or {}).get("point_scale_factor", 1.0)
-        crs = hits.crs
+        # Measured geodesically on WGS 84, so how much of a pipe sits in the
+        # corridor does not depend on which analysis CRS was chosen. Doing it
+        # in EPSG:3857 costs ~0.2% on an east-west run, because Web Mercator
+        # is anisotropic on the ellipsoid.
+        inside = hits.geometry.intersection(mask).to_crs(OUT_CRS)
         # A length for linework, an area for polygons. The perimeter of a
         # clipped polygon is not a number anyone should act on, so it is not
         # reported at all.
         if hits.geom_type.isin(["Polygon", "MultiPolygon"]).any():
-            hits["overlap_ac"] = [
-                round(units.to_ft2(g.area, crs, k) / units.SQFT_PER_ACRE, 4) for g in inside
-            ]
+            hits["overlap_ac"] = [round(units.geodesic_acres(g), 4) for g in inside]
         else:
-            hits["overlap_ft"] = [round(units.to_ft(g.length, crs, k), 2) for g in inside]
+            hits["overlap_ft"] = [round(units.geodesic_ft(g), 2) for g in inside]
     env[out] = hits
     return {
         "predicate": "intersects",
@@ -231,12 +231,14 @@ def _station_range(begin: float | None, end: float | None) -> str | None:
 
 
 def _station_label(sta: float | None) -> str | None:
+    """1200.0 -> "12+00.00". Round before splitting, or 1199.9999 prints 11+100.00."""
     if sta is None:
         return None
-    whole = int(abs(sta) // 100)
-    rem = abs(sta) - whole * 100
     sign = "-" if sta < 0 else ""
-    return f"{sign}{whole}+{rem:05.2f}"
+    whole, rem = divmod(round(abs(sta), 2), 100.0)
+    if round(rem, 2) >= 100.0:  # the rounding carried
+        whole, rem = whole + 1, 0.0
+    return f"{sign}{int(whole)}+{rem:05.2f}"
 
 
 def _op_write(op, plan, env, prov, ctx):

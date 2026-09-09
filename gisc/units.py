@@ -116,6 +116,17 @@ def to_ft2(area_crs_units: float, crs: Any, k: float) -> float:
     return area_crs_units * (unit_to_m**2) / (k**2) / (FT_TO_M**2)
 
 
+def geodesic_ft(geom_wgs84: Any) -> float:
+    """True ground length of a WGS 84 geometry, in feet. No projection involved."""
+    return _GEOD.geometry_length(geom_wgs84) / FT_TO_M
+
+
+def geodesic_acres(geom_wgs84: Any) -> float:
+    """True ground area of a WGS 84 geometry, in acres. No projection involved."""
+    area_m2, _perimeter = _GEOD.geometry_area_perimeter(geom_wgs84)
+    return abs(area_m2) / (FT_TO_M**2) / SQFT_PER_ACRE
+
+
 def grid_to_ft(dist_crs_units: float, crs: Any) -> float:
     """CRS units -> international feet, unit conversion only, no scale factor.
 
