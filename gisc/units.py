@@ -110,12 +110,6 @@ def to_ft(dist_crs_units: float, crs: Any, k: float) -> float:
     return dist_crs_units * unit_to_m / k / FT_TO_M
 
 
-def to_ft2(area_crs_units: float, crs: Any, k: float) -> float:
-    """Grid area -> ground square feet. Area scales as the square of k."""
-    unit_to_m = CRS.from_user_input(crs).axis_info[0].unit_conversion_factor
-    return area_crs_units * (unit_to_m**2) / (k**2) / (FT_TO_M**2)
-
-
 def geodesic_ft(geom_wgs84: Any) -> float:
     """True ground length of a WGS 84 geometry, in feet. No projection involved."""
     return _GEOD.geometry_length(geom_wgs84) / FT_TO_M

@@ -45,6 +45,58 @@ class Result:
         return int(len(self.env[name])) if name in self.env else 0
 
 
+# Artifacts gisc always writes, whatever the task.
+ALWAYS_WRITES = ("plan.json", "provenance.json", "summary.md")
+
+
+def claim_out_dir(out_dir: pathlib.Path | str) -> list[str]:
+    """Take ownership of the output folder, clearing a previous run's artifacts.
+
+    A run folder must describe exactly one run. Left alone, a second run with
+    fewer inputs would leave the first run's ``flood.geojson`` sitting next to
+    a ``provenance.json`` that never mentions it -- an output nobody can trace,
+    which is the one thing gisc exists to prevent.
+
+    Only files a previous gisc run recorded writing are removed. A folder gisc
+    did not write is refused, so a mistyped --out never deletes anyone's work.
+    """
+    out_dir = pathlib.Path(out_dir)
+    if not out_dir.exists():
+        out_dir.mkdir(parents=True)
+        return []
+
+    entries = sorted(out_dir.iterdir(), key=lambda p: p.name)
+    if not entries:
+        return []
+
+    marker = out_dir / "provenance.json"
+    if not marker.is_file():
+        raise UsageError(
+            f"{out_dir} is not empty and was not written by gisc. Point --out at an "
+            "empty folder; gisc will not delete files it does not own."
+        )
+    try:
+        previous = json.loads(marker.read_text(encoding="utf-8"))
+        owned = set(previous.get("outputs", {})) | set(ALWAYS_WRITES)
+    except (OSError, json.JSONDecodeError):
+        owned = set(ALWAYS_WRITES)
+
+    stray = [p.name for p in entries if p.name not in owned]
+    if stray:
+        shown = ", ".join(stray[:5]) + (" ..." if len(stray) > 5 else "")
+        raise UsageError(
+            f"{out_dir} holds a previous gisc run plus {len(stray)} file(s) it does "
+            f"not account for ({shown}). Point --out at an empty folder."
+        )
+
+    removed = []
+    for entry in entries:
+        if entry.is_file():
+            entry.unlink()
+            removed.append(entry.name)
+    return removed
+
+
 def _sha256(path: pathlib.Path) -> str:
     h = hashlib.sha256()
     with path.open("rb") as fh:
@@ -129,13 +181,22 @@ def _op_intersect(op, plan, env, prov, ctx):
         # in EPSG:3857 costs ~0.2% on an east-west run, because Web Mercator
         # is anisotropic on the ellipsoid.
         inside = hits.geometry.intersection(mask).to_crs(OUT_CRS)
-        # A length for linework, an area for polygons. The perimeter of a
-        # clipped polygon is not a number anyone should act on, so it is not
-        # reported at all.
-        if hits.geom_type.isin(["Polygon", "MultiPolygon"]).any():
-            hits["overlap_ac"] = [round(units.geodesic_acres(g), 4) for g in inside]
-        else:
-            hits["overlap_ft"] = [round(units.geodesic_ft(g), 2) for g in inside]
+        # Decided per feature, not per layer: a length for linework, an area
+        # for polygons, neither for a point. A mixed layer must not hand its
+        # lines a zero-acre area.
+        lengths, areas = [], []
+        for geom in inside:
+            polygonal = geom is not None and geom.geom_type in (
+                "Polygon", "MultiPolygon", "GeometryCollection"
+            )
+            areas.append(round(units.geodesic_acres(geom), 4) if polygonal else None)
+            linear = geom is not None and "Line" in geom.geom_type
+            lengths.append(round(units.geodesic_ft(geom), 2) if linear else None)
+        if any(v is not None for v in lengths):
+            hits["overlap_ft"] = lengths
+        if any(v is not None for v in areas):
+            hits["overlap_ac"] = areas
+
     env[out] = hits
     return {
         "predicate": "intersects",
@@ -231,14 +292,16 @@ def _station_range(begin: float | None, end: float | None) -> str | None:
 
 
 def _station_label(sta: float | None) -> str | None:
-    """1200.0 -> "12+00.00". Round before splitting, or 1199.9999 prints 11+100.00."""
+    """1200.0 -> "12+00.00".
+
+    Done in integer hundredths. Splitting the float first lets 1199.99999
+    print as "11+100.00", which is not a station.
+    """
     if sta is None:
         return None
     sign = "-" if sta < 0 else ""
-    whole, rem = divmod(round(abs(sta), 2), 100.0)
-    if round(rem, 2) >= 100.0:  # the rounding carried
-        whole, rem = whole + 1, 0.0
-    return f"{sign}{int(whole)}+{rem:05.2f}"
+    whole, rem = divmod(int(round(abs(sta) * 100)), 10_000)
+    return f"{sign}{whole}+{rem / 100:05.2f}"
 
 
 def _op_write(op, plan, env, prov, ctx):

@@ -144,6 +144,13 @@ def _centerline(alignment: ET.Element, path) -> tuple[LineString, list[str]]:
                     f"CRS units from the previous element's end at {coords[-1]}. "
                     "gisc will not bridge a gap it was not asked to bridge."
                 )
+            if gap > 1e-9:
+                # Snapping is what a tolerance means, but a discarded position
+                # is still a change to the geometry, so it goes on the record.
+                notes.append(
+                    f"closed a {gap:.4f} CRS-unit gap before <{kind}> by snapping to "
+                    "the previous element's end"
+                )
             coords.extend(seg[1:])
         else:
             coords.extend(seg)

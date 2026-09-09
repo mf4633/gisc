@@ -546,3 +546,84 @@ def test_overlap_is_geodesic_so_the_analysis_crs_does_not_move_it(tmp_path):
                                                            abs=0.05)
     # Stationing is identical, not merely close.
     assert list(w["sta_label"]) == list(s["sta_label"])
+
+
+# -- the scale factor guard ------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "crs, xy",
+    [
+        ("EPSG:3857", (0.0, 3e7)),          # near the pole, k ~ 55
+        ("EPSG:3857", (2e7, 2e7)),          # off the edge of the world
+        ("EPSG:2264", (1e9, 1e9)),          # NC state plane, but nowhere near NC
+    ],
+)
+def test_implausible_scale_factor_is_refused(crs, xy):
+    """A buffer is only meaningful if the data is where the CRS says it is."""
+    with pytest.raises(UsageError, match="implausible"):
+        units.buffer_distance(crs, 15.0, xy)
+
+
+def test_geographic_crs_cannot_measure_feet():
+    with pytest.raises(UsageError, match="degrees"):
+        units.scale_factor("EPSG:4326", (-82.5, 35.6))
+
+
+# -- summary rendering -----------------------------------------------------
+
+
+def test_summary_renders_plan_notes_and_alignment_notes(tmp_path):
+    """A stub source and a flattened curve both have to reach the reader."""
+    from gisc.tasks import corridor
+
+    curved = tmp_path / "curve.xml"
+    curved.write_text("""<?xml version="1.0"?>
+<LandXML xmlns="http://www.landxml.org/schema/LandXML-1.2">
+  <CoordinateSystem epsgCode="2264"/>
+  <Alignments name="A"><Alignment name="C1" staStart="1000">
+    <CoordGeom><Curve rot="ccw">
+      <Start>675000.0 905100.0</Start><Center>675000.0 905000.0</Center>
+      <End>675100.0 905000.0</End>
+    </Curve></CoordGeom>
+  </Alignment></Alignments>
+</LandXML>""")
+
+    plan = compile_task(
+        "corridor.conflicts", alignment=str(curved), utils=UTILS,
+        buffer_ft=15.0, crs="EPSG:2264", out_dir=tmp_path / "run",
+    )
+    result = execute(plan, tmp_path / "run")
+    plan.notes = ["a compile-time note"]
+    text = corridor.summary(result, tmp_path / "run")
+
+    assert "## Notes" in text and "a compile-time note" in text
+    assert "## Alignment notes" in text and "flattened a <Curve>" in text
+
+
+def test_summary_handles_an_output_with_no_feature_count(tmp_path):
+    """plan.json and summary.md are listed by path, with no count to show."""
+    from gisc.tasks import corridor
+
+    result = execute(_compile(tmp_path), tmp_path)
+    result.provenance["outputs"]["plan.json"] = {"path": str(tmp_path / "plan.json")}
+    text = corridor.summary(result, tmp_path)
+    assert "- `plan.json`" in text
+    assert "- `conflicts.geojson` -- 2 features" in text
+
+
+def test_summary_table_skips_a_frame_with_nothing_to_show(tmp_path):
+    from gisc.tasks import corridor
+
+    bare = gpd.GeoDataFrame({"unrelated": [1]},
+                            geometry=[LineString([(0, 0), (1, 1)])], crs="EPSG:2264")
+    assert corridor._table(bare, [("name", "name"), ("sta_label", "station")]) == []
+
+
+def test_summary_singularises_one_feature(tmp_path):
+    from gisc.tasks import corridor
+
+    result = execute(_compile(tmp_path), tmp_path)
+    text = corridor.summary(result, tmp_path)
+    assert "1 feature," in text      # flood.geojson has exactly one
+    assert "1 features," not in text

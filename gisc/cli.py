@@ -18,14 +18,33 @@ import typer
 from gisc import __version__
 from gisc.compile import compile_task, write_plan
 from gisc.errors import GiscError
-from gisc.exec import execute
+from gisc.exec import claim_out_dir, execute
 from gisc.tasks import TASKS
+
+EXIT_CODES = """Exit codes: 0 ok, 2 usage, 3 missing CRS, 4 adapter failed, 5 adapter stubbed."""
 
 app = typer.Typer(
     add_completion=False,
     no_args_is_help=True,
     help="A stateless civil/GIS compiler. Reads your files, writes one folder.",
+    epilog=EXIT_CODES,
 )
+
+
+def _version_callback(value: bool) -> None:
+    if value:
+        typer.echo(__version__)
+        raise typer.Exit()
+
+
+@app.callback()
+def _root(
+    version: bool = typer.Option(
+        None, "--version", "-V", callback=_version_callback, is_eager=True,
+        help="Print the gisc version and exit.",
+    ),
+) -> None:
+    """A stateless civil/GIS compiler."""
 
 # Shared options, so `ir` and `compile` cannot drift apart.
 _TASK = typer.Argument(..., help="e.g. corridor.conflicts")
@@ -118,6 +137,7 @@ def compile_cmd(
     """Compile the plan and run it."""
     out_dir = pathlib.Path(out) if out else pathlib.Path("./out") / _run_id()
     try:
+        cleared = claim_out_dir(out_dir)
         plan = compile_task(
             task,
             alignment=alignment, utils=utils, flood=flood, row=row,
@@ -135,7 +155,13 @@ def compile_cmd(
 
     summary = TASKS[task].summary(result, out_dir)
     (out_dir / "summary.md").write_text(summary, encoding="utf-8")
-    result.provenance["outputs"]["summary.md"] = {"path": str((out_dir / "summary.md").resolve())}
+    # Every file in the folder is listed, provenance.json included -- a reader
+    # checking "is everything here accounted for?" must find nothing left over.
+    # It cannot carry its own sha256, so it records a path only.
+    for name in ("plan.json", "summary.md", "provenance.json"):
+        result.provenance["outputs"][name] = {"path": str((out_dir / name).resolve())}
+    if cleared:
+        result.provenance["cleared_from_previous_run"] = cleared
     (out_dir / "provenance.json").write_text(
         json.dumps(result.provenance, indent=2, default=str) + "\n", encoding="utf-8"
     )
