@@ -55,5 +55,5 @@ refusing two pipes whose structures the export omitted.
 design), and station equations — no LandXML on the machine this was built on has a
 curve or spiral in an alignment, so the arc case rests on the Civil 3D check above.
 
-Python ≥3.11 (3.12 is untested here only because this machine has 3.11).
+Python ≥3.11, tested in CI on Linux and Windows against 3.11 and 3.12.
 Regenerate fixtures with `python fixtures/make_fixtures.py`.
