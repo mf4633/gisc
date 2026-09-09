@@ -28,6 +28,9 @@ include = ["gisc*"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 filterwarnings = ["ignore::DeprecationWarning"]
+markers = [
+  "civil3d: compares gisc against artifacts captured from Autodesk Civil 3D",
+]
 
 [tool.coverage.report]
 exclude_lines = ["pragma: no cover", "if __name__ == .__main__.:"]

@@ -1,0 +1,281 @@
+{
+  "product": "Autodesk Civil 3D 2023",
+  "com_progid": "AeccXUiLand.AeccApplication.13.5",
+  "acad_version": "24.2s (LMS Tech)",
+  "coordinate_system": {
+    "cs_code": "NC83F",
+    "description": "NAD83 North Carolina State Planes, US Foot",
+    "epsg": 2264
+  },
+  "alignment": {
+    "name": "GISC-VALIDATION",
+    "length": 1035.6194490192668,
+    "starting_station": 1000.0,
+    "ending_station": 2035.6194490192668,
+    "entities": [
+      {
+        "Type": 1,
+        "Id": 1,
+        "Constraint": 289,
+        "EntityBefore": 0,
+        "EntityAfter": 2,
+        "SubEntityCount": 0,
+        "Length": 400.0,
+        "StartEasting": 905000.0,
+        "StartNorthing": 675000.0,
+        "EndEasting": 905400.0,
+        "EndNorthing": 675000.0,
+        "StartingStation": 1000.0,
+        "EndingStation": 1400.0,
+        "PIEasting": 905400.0,
+        "PINorthing": 675000.0,
+        "HighestDesignSpeed": 0.0,
+        "Direction": 1.5707963267948966,
+        "LineConstraint": 513,
+        "MidEasting": 905200.0,
+        "MidNorthing": 675000.0
+      },
+      {
+        "Type": 2,
+        "Id": 2,
+        "Constraint": 289,
+        "EntityBefore": 1,
+        "EntityAfter": 3,
+        "SubEntityCount": 0,
+        "Length": 235.61944901924042,
+        "StartEasting": 905400.0,
+        "StartNorthing": 675000.0,
+        "EndEasting": 905612.132034356,
+        "EndNorthing": 675087.867965644,
+        "StartingStation": 1400.0,
+        "EndingStation": 1635.6194490192404,
+        "PIEasting": 905524.2640687119,
+        "PINorthing": 675000.0,
+        "HighestDesignSpeed": 0.0,
+        "CenterEasting": 905399.9999999999,
+        "CenterNorthing": 675300.0000000005,
+        "Radius": 300.0000000004459,
+        "StartDirection": 1.5707963267945084,
+        "EndDirection": 0.7853981633982714,
+        "Delta": 0.7853981633963008,
+        "ChordLength": 229.6100594190771,
+        "ChordDirection": 1.1780972450964176,
+        "ExternalSecant": 24.717660087677753,
+        "MidOrdinate": 22.836140246582037,
+        "DeflectedAngle": 2.3561944901935563,
+        "PIStation": 1524.2640687118983,
+        "CurveConstraint": 769,
+        "ExternalTangent": 124.26406871191153,
+        "Clockwise": false,
+        "CurveGroupIndex": "",
+        "CurveGroupSubEntityIndex": ""
+      },
+      {
+        "Type": 1,
+        "Id": 3,
+        "Constraint": 289,
+        "EntityBefore": 2,
+        "EntityAfter": 0,
+        "SubEntityCount": 0,
+        "Length": 400.0000000000264,
+        "StartEasting": 905612.132034356,
+        "StartNorthing": 675087.867965644,
+        "EndEasting": 905894.9747468306,
+        "EndNorthing": 675370.7106781186,
+        "StartingStation": 1635.6194490192404,
+        "EndingStation": 2035.6194490192668,
+        "PIEasting": 905894.9747468306,
+        "PINorthing": 675370.7106781186,
+        "HighestDesignSpeed": 0.0,
+        "Direction": 0.7853981633974483,
+        "LineConstraint": 513,
+        "MidEasting": 905753.5533905933,
+        "MidNorthing": 675229.2893218813
+      }
+    ],
+    "station_offsets": [
+      {
+        "x": 905200.0,
+        "y": 675000.0,
+        "station": 1200.0,
+        "offset": 0.0
+      },
+      {
+        "x": 905200.0,
+        "y": 675008.0,
+        "station": 1200.0,
+        "offset": -8.0
+      },
+      {
+        "x": 905200.0,
+        "y": 674992.0,
+        "station": 1200.0,
+        "offset": 8.0
+      },
+      {
+        "x": 905400.0,
+        "y": 675000.0,
+        "station": 1400.0,
+        "offset": 0.0
+      },
+      {
+        "x": 905514.8050297095,
+        "y": 675022.8361402466,
+        "station": 1517.8097245095676,
+        "offset": 0.0
+      },
+      {
+        "x": 905612.132034356,
+        "y": 675087.867965644,
+        "station": 1635.6194490192404,
+        "offset": 0.0
+      },
+      {
+        "x": 905514.8050297095,
+        "y": 675032.8361402466,
+        "station": 1521.7579266624882,
+        "offset": -9.213613102439483
+      }
+    ],
+    "point_locations": [
+      {
+        "station": 1000.0,
+        "x": 905000.0,
+        "y": 675000.0
+      },
+      {
+        "station": 1050.0,
+        "x": 905050.0,
+        "y": 675000.0
+      },
+      {
+        "station": 1100.0,
+        "x": 905100.0,
+        "y": 675000.0
+      },
+      {
+        "station": 1150.0,
+        "x": 905150.0,
+        "y": 675000.0
+      },
+      {
+        "station": 1200.0,
+        "x": 905200.0,
+        "y": 675000.0
+      },
+      {
+        "station": 1250.0,
+        "x": 905250.0,
+        "y": 675000.0
+      },
+      {
+        "station": 1300.0,
+        "x": 905300.0,
+        "y": 675000.0
+      },
+      {
+        "station": 1350.0,
+        "x": 905350.0,
+        "y": 675000.0
+      },
+      {
+        "station": 1400.0,
+        "x": 905400.0,
+        "y": 675000.0
+      },
+      {
+        "station": 1450.0,
+        "x": 905449.768839808,
+        "y": 675004.1570305312
+      },
+      {
+        "station": 1500.0,
+        "x": 905498.1584090388,
+        "y": 675016.5129161056
+      },
+      {
+        "station": 1550.0,
+        "x": 905543.8276615812,
+        "y": 675036.7252314329
+      },
+      {
+        "station": 1600.0,
+        "x": 905585.5109409209,
+        "y": 675064.2338217669
+      },
+      {
+        "station": 1650.0,
+        "x": 905622.3006194717,
+        "y": 675098.0365507597
+      },
+      {
+        "station": 1700.0,
+        "x": 905657.6559585311,
+        "y": 675133.3918898191
+      },
+      {
+        "station": 1750.0,
+        "x": 905693.0112975903,
+        "y": 675168.7472288783
+      },
+      {
+        "station": 1800.0,
+        "x": 905728.3666366497,
+        "y": 675204.1025679377
+      },
+      {
+        "station": 1850.0,
+        "x": 905763.721975709,
+        "y": 675239.457906997
+      },
+      {
+        "station": 1900.0,
+        "x": 905799.0773147683,
+        "y": 675274.8132460563
+      },
+      {
+        "station": 1950.0,
+        "x": 905834.4326538277,
+        "y": 675310.1685851157
+      },
+      {
+        "station": 2000.0,
+        "x": 905869.787992887,
+        "y": 675345.523924175
+      }
+    ]
+  },
+  "design": {
+    "note": "tangent - 45 deg arc (R=300) - tangent, in EPSG:2264 ftUS",
+    "E0": 905000.0,
+    "N0": 675000.0,
+    "radius": 300.0,
+    "sweep_deg": 45.0,
+    "A": [
+      905000.0,
+      675000.0
+    ],
+    "B": [
+      905400.0,
+      675000.0
+    ],
+    "M": [
+      905514.8050297095,
+      675022.8361402466
+    ],
+    "T": [
+      905612.132034356,
+      675087.867965644
+    ],
+    "C": [
+      905894.9747468306,
+      675370.7106781186
+    ],
+    "center": [
+      905400.0,
+      675300.0
+    ],
+    "sta_start": 1000.0,
+    "hand_computed_length": 1035.6194490192345
+  }
+}

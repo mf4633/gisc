@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Geometry read out of Autodesk Civil 3D 2023 over COM. Coordinates are
+     Civil 3D's, to 10 decimal places. Written by c3d_entities.py. -->
+<LandXML xmlns="http://www.landxml.org/schema/LandXML-1.2" version="1.2">
+  <Units>
+    <Imperial linearUnit="USSurveyFoot" areaUnit="squareFoot"
+              volumeUnit="cubicFeet" temperatureUnit="fahrenheit"
+              pressureUnit="inHG" angularUnit="decimal degrees"
+              directionUnit="decimal degrees"/>
+  </Units>
+  <CoordinateSystem epsgCode="2264" horizontalDatum="NAD83"
+                    horizontalCoordinateSystemName="NAD83 / North Carolina (ftUS)"
+                    desc="NAD83 North Carolina State Planes, US Foot"/>
+  <Alignments name="GISC">
+    <Alignment name="GISC-VALIDATION" length="1035.6194490193" staStart="1000.0000000000">
+      <CoordGeom>
+        <Line>
+          <Start>675000.0000000000 905000.0000000000</Start>
+          <End>675000.0000000000 905400.0000000000</End>
+        </Line>
+        <Curve rot="ccw" radius="300.0000000004">
+          <Start>675000.0000000000 905400.0000000000</Start>
+          <Center>675300.0000000005 905399.9999999999</Center>
+          <End>675087.8679656440 905612.1320343560</End>
+        </Curve>
+        <Line>
+          <Start>675087.8679656440 905612.1320343560</Start>
+          <End>675370.7106781186 905894.9747468306</End>
+        </Line>
+      </CoordGeom>
+    </Alignment>
+  </Alignments>
+</LandXML>
