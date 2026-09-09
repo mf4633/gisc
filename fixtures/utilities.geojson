@@ -1,0 +1,65 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "WL-8IN",
+        "note": "water, crosses at STA 12+00"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -82.68141016340756,
+            35.54872639147218
+          ],
+          [
+            -82.68142512090175,
+            35.549055863078046
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "SS-12IN",
+        "note": "sewer, 8 ft off centerline"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -82.67908563160516,
+            35.54939621584235
+          ],
+          [
+            -82.6782457360775,
+            35.54942166348945
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "GAS-4IN",
+        "note": "gas, 40 ft off centerline"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -82.67908961777393,
+            35.549484075001374
+          ],
+          [
+            -82.67824972133793,
+            35.54950952267543
+          ]
+        ]
+      }
+    }
+  ]
+}

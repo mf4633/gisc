@@ -1,0 +1,33 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "CL-MAIN",
+        "sta_start": 1000.0
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            -82.682089553,
+            35.548870752
+          ],
+          [
+            -82.680745731,
+            35.548911499
+          ],
+          [
+            -82.679420593,
+            35.54936407
+          ],
+          [
+            -82.678076761,
+            35.549404788
+          ]
+        ]
+      }
+    }
+  ]
+}

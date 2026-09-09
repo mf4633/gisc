@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<LandXML xmlns="http://www.landxml.org/schema/LandXML-1.2" version="1.2"
+         date="2026-09-09" time="09:00:00">
+  <Units>
+    <Imperial linearUnit="USSurveyFoot" areaUnit="squareFoot"
+              volumeUnit="cubicFeet" temperatureUnit="fahrenheit"
+              pressureUnit="inHG" angularUnit="decimal degrees"
+              directionUnit="decimal degrees"/>
+  </Units>
+  <CoordinateSystem epsgCode="2264" horizontalDatum="NAD83"
+                    horizontalCoordinateSystemName="NAD83 / North Carolina (ftUS)"/>
+  <Alignments name="Roadway">
+    <Alignment name="CL-MAIN" length="1227.2002" staStart="1000.0000">
+      <CoordGeom>
+        <Line>
+          <Start>675000.0000 905000.0000</Start>
+          <End>675000.0000 905400.0000</End>
+        </Line>
+        <Line>
+          <Start>675000.0000 905400.0000</Start>
+          <End>675150.0000 905800.0000</End>
+        </Line>
+        <Line>
+          <Start>675150.0000 905800.0000</Start>
+          <End>675150.0000 906200.0000</End>
+        </Line>
+      </CoordGeom>
+    </Alignment>
+  </Alignments>
+</LandXML>
