@@ -10,6 +10,8 @@ import json
 from typing import Any
 
 import geopandas as gpd
+from pyproj import CRS
+from pyproj.exceptions import CRSError
 
 from gisc.adapters._common import file_provenance, now, resolve
 from gisc.errors import AdapterError, MissingCRSError
@@ -38,13 +40,25 @@ def describe(ref: str, layer: str | None = None, crs_override: str | None = None
         crs, source = declared, "declared"
     else:
         crs, source = "EPSG:4326", "rfc7946_default"
-    return {
+
+    # GDAL writes the crs member as a URN, so most exported GeoJSON declares
+    # "urn:ogc:def:crs:EPSG::2264" for what everything else calls EPSG:2264.
+    # Normalise it, or the same system reads as two in a provenance table.
+    info = {
         "kind": "geojson",
         "ref": str(path),
         "layer": None,
         "native_crs": crs,
         "crs_source": source,
     }
+    try:
+        canonical = CRS.from_user_input(crs).to_string()
+    except CRSError:
+        return info  # unresolvable; read() will refuse it with the driver's message
+    if canonical != crs:
+        info["native_crs"] = canonical
+        info["crs_declared_as"] = crs
+    return info
 
 
 def read(ref: str, layer: str | None = None, crs_override: str | None = None):

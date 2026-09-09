@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Shaped like a real Civil 3D LANDXMLOUT export, with invented coordinates.
+
+  A real sheet export does not hand you one tidy alignment. It carries several
+  alignments, a <Profile> and <Feature> riding inside each one, a
+  <PlanFeatures> block holding the curved linework (curb returns, ditches), a
+  CoordinateSystem that gives both epsgCode and ogcWktCode, and staStart
+  written as "0." with a trailing dot.
+
+  Every one of those is here so the parser is held to it.
+-->
+<LandXML xmlns="http://www.landxml.org/schema/LandXML-1.2" version="1.2"
+         date="2026-09-09" time="09:00:00">
+  <Units>
+    <Imperial linearUnit="USSurveyFoot" areaUnit="squareFoot"
+              volumeUnit="cubicFeet" temperatureUnit="fahrenheit"
+              pressureUnit="inHG" angularUnit="decimal degrees"
+              directionUnit="decimal degrees"/>
+  </Units>
+  <CoordinateSystem desc="NAD83 North Carolina State Planes, US Foot"
+                    epsgCode="2264"
+                    ogcWktCode="PROJCS[&quot;NC83F&quot;,GEOGCS[&quot;LL83&quot;,DATUM[&quot;NAD83&quot;]]]"/>
+  <Alignments name="Site">
+    <Alignment name="Alignment - M" length="100.000000000046" staStart="0.">
+      <CoordGeom>
+        <Line>
+          <Start>675000.0000 905000.0000</Start>
+          <End>675000.0000 905040.0000</End>
+        </Line>
+        <Line>
+          <Start>675000.0000 905040.0000</Start>
+          <End>675030.0000 905040.0000</End>
+        </Line>
+        <Line>
+          <Start>675030.0000 905040.0000</Start>
+          <End>675030.0000 905070.0000</End>
+        </Line>
+      </CoordGeom>
+      <Feature code="Autodesk Civil Alignment Properties">
+        <Property label="alignmentType" value="Centerline"/>
+      </Feature>
+      <Profile name="EG">
+        <ProfSurf name="EG">
+          <PntList2D>0.0 2100.0 50.0 2101.5 100.0 2103.0</PntList2D>
+        </ProfSurf>
+      </Profile>
+    </Alignment>
+    <Alignment name="Centerline Alignment" length="500.000000000012" staStart="0.">
+      <CoordGeom>
+        <Line>
+          <Start>675100.0000 905100.0000</Start>
+          <End>675100.0000 905300.0000</End>
+        </Line>
+        <Line>
+          <Start>675100.0000 905300.0000</Start>
+          <End>675200.0000 905300.0000</End>
+        </Line>
+        <Line>
+          <Start>675200.0000 905300.0000</Start>
+          <End>675200.0000 905400.0000</End>
+        </Line>
+        <Line>
+          <Start>675200.0000 905400.0000</Start>
+          <End>675300.0000 905400.0000</End>
+        </Line>
+      </CoordGeom>
+    </Alignment>
+  </Alignments>
+  <PlanFeatures name="Misc Linework">
+    <PlanFeature name="Curb Return">
+      <CoordGeom>
+        <Line>
+          <Start>675000.0000 905500.0000</Start>
+          <End>675000.0000 905550.0000</End>
+        </Line>
+        <Curve rot="ccw" radius="50.0000">
+          <Start>675000.0000 905550.0000</Start>
+          <Center>675050.0000 905550.0000</Center>
+          <End>675050.0000 905600.0000</End>
+        </Curve>
+      </CoordGeom>
+    </PlanFeature>
+  </PlanFeatures>
+</LandXML>

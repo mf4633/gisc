@@ -429,3 +429,94 @@ def test_landxml_named_alignment_that_is_not_there(tmp_path):
 )
 def test_landxml_unit_mismatch_detection(declared, unit, mismatch):
     assert landxml._unit_mismatch(declared, unit) is mismatch
+
+
+@pytest.mark.parametrize(
+    "declared, canonical",
+    [
+        ("urn:ogc:def:crs:EPSG::2264", "EPSG:2264"),   # what GDAL writes
+        ("urn:ogc:def:crs:EPSG::4326", "EPSG:4326"),
+        ("EPSG:2264", "EPSG:2264"),
+    ],
+)
+def test_geojson_urn_crs_is_normalised(tmp_path, declared, canonical):
+    """QGIS/ArcGIS exports declare URNs; the same system must not read as two."""
+    ref = write(tmp_path / "a.geojson", json.dumps({
+        "type": "FeatureCollection",
+        "crs": {"type": "name", "properties": {"name": declared}},
+        "features": [{"type": "Feature", "properties": {},
+                      "geometry": {"type": "LineString",
+                                   "coordinates": [[905000, 675000], [905100, 675000]]}}],
+    }))
+    info = geojson.describe(ref)
+    assert info["native_crs"] == canonical
+    assert info["crs_source"] == "declared"
+    if declared != canonical:
+        assert info["crs_declared_as"] == declared  # the raw string is not lost
+    else:
+        assert "crs_declared_as" not in info
+
+
+def test_geojson_unresolvable_crs_member_is_left_alone(tmp_path):
+    ref = write(tmp_path / "a.geojson", json.dumps({
+        "type": "FeatureCollection",
+        "crs": {"type": "name", "properties": {"name": "Bob's Grid"}},
+        "features": [{"type": "Feature", "properties": {},
+                      "geometry": {"type": "LineString", "coordinates": [[0, 0], [1, 1]]}}],
+    }))
+    assert geojson.describe(ref)["native_crs"] == "Bob's Grid"
+
+
+# -- shaped like a real Civil 3D export ------------------------------------
+
+EXPORT_SHAPE = FIXTURES / "landxml_export_shape.xml"
+
+
+def test_real_export_shape_needs_an_alignment_named():
+    """A sheet export carries several alignments. Guessing is not allowed."""
+    with pytest.raises(AdapterError) as exc:
+        landxml.describe(str(EXPORT_SHAPE))
+    assert "has 2 alignments" in str(exc.value)
+    assert "Alignment - M" in str(exc.value)
+    assert "Centerline Alignment" in str(exc.value)
+
+
+@pytest.mark.parametrize(
+    "name, vertices, length",
+    [("Alignment - M", 4, 100.0), ("Centerline Alignment", 5, 500.0)],
+)
+def test_real_export_shape_alignments_parse(name, vertices, length):
+    gdf, prov = landxml.read(str(EXPORT_SHAPE), layer=name)
+    assert prov["vertices"] == vertices
+    assert prov["length_computed"] == pytest.approx(length, abs=1e-6)
+    # Declared length carries float noise; that is not a disagreement.
+    assert not any("declared length" in n for n in prov["notes"])
+
+
+def test_real_export_shape_resolves_crs_from_epsg_code():
+    info = landxml.describe(str(EXPORT_SHAPE), layer="Alignment - M")
+    assert info["native_crs"] == "EPSG:2264"
+    assert info["crs_source"] == "declared"  # epsgCode wins over ogcWktCode
+    assert info["landxml_linear_unit"] == "USSurveyFoot"
+
+
+def test_sta_start_written_with_a_trailing_dot():
+    """Civil 3D writes staStart="0." -- a float, but not one every parser takes."""
+    info = landxml.describe(str(EXPORT_SHAPE), layer="Alignment - M")
+    assert info["sta_start"] == 0.0
+
+
+def test_plan_features_are_not_mistaken_for_the_alignment():
+    """<PlanFeatures> holds curved linework. It is not the centreline."""
+    gdf, prov = landxml.read(str(EXPORT_SHAPE), layer="Alignment - M")
+    # Three tangents, so four vertices. A flattened curve would blow that up.
+    assert prov["vertices"] == 4
+    assert not any("flattened" in n for n in prov["notes"])
+    assert prov["length_computed"] == pytest.approx(100.0, abs=1e-6)
+
+
+def test_profile_and_feature_inside_an_alignment_are_ignored():
+    """Both ride inside <Alignment> and neither is geometry gisc wants."""
+    gdf, prov = landxml.read(str(EXPORT_SHAPE), layer="Alignment - M")
+    assert gdf.geometry.iloc[0].geom_type == "LineString"
+    assert prov["features_in"] == 1
