@@ -1,10 +1,19 @@
-"""LandXML -> one alignment centerline as a LineString.
+"""LandXML -> an alignment centerline, or a pipe network.
 
-Deliberately small. It understands ``Line`` and ``Curve`` (circular arc),
-which is what an ordinary roadway or utility centerline is made of. Anything
-else -- spirals, irregular lines, a file with no CRS -- fails with a message
-that names the file and the element, rather than quietly producing a shape
-that is almost right.
+Two subjects, because a Civil 3D project exports both and a corridor check
+needs both: ``<Alignment>`` is the centreline you measure from,
+``<PipeNetwork>`` is the buried utility you are looking for.
+
+Alignments understand ``Line`` and ``Curve`` (circular arc), which is what an
+ordinary roadway or utility centreline is made of. Anything else -- spirals,
+irregular lines, a file with no CRS -- fails with a message that names the
+file and the element, rather than quietly producing a shape that is almost
+right.
+
+Pipe geometry is not in the ``<Pipe>`` element. A pipe names the structures at
+its ends and the coordinates live on those, so a pipe whose structure is
+missing from the file has no geometry gisc can vouch for. It is left out and
+listed in provenance, never straight-lined between guesses.
 """
 
 from __future__ import annotations
@@ -15,7 +24,7 @@ from typing import Any
 
 import geopandas as gpd
 from pyproj import CRS
-from shapely.geometry import LineString
+from shapely.geometry import LineString, Point
 
 from gisc.adapters._common import file_provenance, now, resolve
 from gisc.errors import AdapterError, MissingCRSError
@@ -160,42 +169,179 @@ def _centerline(alignment: ET.Element, path) -> tuple[LineString, list[str]]:
     return LineString(coords), notes
 
 
-def _pick_alignment(root: ET.Element, path, name: str | None) -> ET.Element:
-    found = _findall(root, "Alignment")
-    if not found:
-        raise AdapterError(f"{path}: no <Alignment> element")
-    names = ", ".join(a.get("name", "(unnamed)") for a in found)
-    if name is None:
-        if len(found) > 1:
+def _label(el: ET.Element) -> str:
+    return el.get("name") or "(unnamed)"
+
+
+def _pick_subject(root: ET.Element, path, name: str | None) -> tuple[str, ET.Element]:
+    """Work out whether ``name`` means an alignment or a pipe network."""
+    alignments = _findall(root, "Alignment")
+    networks = _findall(root, "PipeNetwork")
+
+    if name is not None:
+        for a in alignments:
+            if a.get("name") == name:
+                return "alignment", a
+        for n in networks:
+            if n.get("name") == name:
+                return "pipenetwork", n
+        available = ", ".join(
+            [f"alignment {_label(a)!r}" for a in alignments]
+            + [f"network {_label(n)!r}" for n in networks]
+        ) or "nothing readable"
+        raise AdapterError(f"{path}: no <Alignment name={name!r}>; available: {available}")
+
+    if not alignments and not networks:
+        raise AdapterError(
+            f"{path}: no <Alignment> and no <PipeNetwork>. gisc reads alignments and "
+            "pipe networks; surfaces, parcels and point groups are not implemented."
+        )
+    if alignments and not networks:
+        if len(alignments) > 1:
+            names = ", ".join(_label(a) for a in alignments)
             raise AdapterError(
-                f"{path}: has {len(found)} alignments ({names}); name one with layer=<name>"
+                f"{path}: has {len(alignments)} alignments ({names}); "
+                "name one with layer=<name>"
             )
-        return found[0]
-    for a in found:
-        if a.get("name") == name:
-            return a
-    raise AdapterError(f"{path}: no <Alignment name={name!r}>; available: {names}")
+        return "alignment", alignments[0]
+    if networks and not alignments:
+        if len(networks) > 1:
+            names = ", ".join(_label(n) for n in networks)
+            raise AdapterError(
+                f"{path}: has {len(networks)} pipe networks ({names}); "
+                "name one with layer=<name>"
+            )
+        return "pipenetwork", networks[0]
+
+    both = ", ".join(
+        [f"alignment {_label(a)!r}" for a in alignments]
+        + [f"network {_label(n)!r}" for n in networks]
+    )
+    raise AdapterError(
+        f"{path}: holds both alignments and pipe networks ({both}); "
+        "name one with layer=<name>"
+    )
+
+
+def _pick_alignment(root: ET.Element, path, name: str | None) -> ET.Element:
+    subject, el = _pick_subject(root, path, name)
+    if subject != "alignment":
+        raise AdapterError(f"{path}: {name!r} is a pipe network, not an alignment")
+    return el
+
+
+def _maybe_float(value: str | None) -> float | None:
+    try:
+        return float(value) if value not in (None, "") else None
+    except ValueError:
+        return None
+
+
+def _structures(network: ET.Element, path) -> dict[str, dict[str, Any]]:
+    """Structures carry the coordinates; pipes only reference them by name."""
+    out: dict[str, dict[str, Any]] = {}
+    for s in network.iter():
+        if _tag(s) != "Struct":
+            continue
+        centre = _find(s, "Center")
+        if centre is None:
+            continue
+        name = s.get("name") or f"struct{len(out)}"
+        out[name] = {
+            "name": name,
+            "desc": s.get("desc"),
+            "elev_rim": _maybe_float(s.get("elevRim")),
+            "elev_sump": _maybe_float(s.get("elevSump")),
+            "xy": _point(centre, path, "Struct/Center"),
+        }
+    return out
+
+
+def _network_features(network: ET.Element, path):
+    """Pipes as lines and structures as points, plus what had to be left out."""
+    structures = _structures(network, path)
+    rows: list[dict[str, Any]] = []
+    geoms: list[Any] = []
+    skipped: list[dict[str, str]] = []
+    length_gap = 0.0
+
+    for pipe in network.iter():
+        if _tag(pipe) != "Pipe":
+            continue
+        name = pipe.get("name") or f"pipe{len(rows)}"
+        start, end = pipe.get("refStart"), pipe.get("refEnd")
+        a, b = structures.get(start or ""), structures.get(end or "")
+        if a is None or b is None:
+            missing = [n for n, s in ((start, a), (end, b)) if s is None]
+            skipped.append({
+                "pipe": name,
+                "reason": "structure(s) not in this file: "
+                          + ", ".join(repr(m) for m in missing),
+            })
+            continue
+        if a["xy"] == b["xy"]:
+            skipped.append({"pipe": name, "reason": "both structures at the same point"})
+            continue
+
+        circ = _find(pipe, "CircPipe")
+        declared = _maybe_float(pipe.get("length"))
+        computed = math.dist(a["xy"], b["xy"])
+        if declared:
+            length_gap = max(length_gap, abs(computed - declared))
+        rows.append({
+            "kind": "pipe",
+            "name": name,
+            "desc": pipe.get("desc"),
+            "from_struct": start,
+            "to_struct": end,
+            "diameter": _maybe_float(circ.get("diameter")) if circ is not None else None,
+            "material": circ.get("material") if circ is not None else None,
+            "slope": _maybe_float(pipe.get("slope")),
+            "length_declared": declared,
+        })
+        geoms.append(LineString([a["xy"], b["xy"]]))
+
+    for s in structures.values():
+        rows.append({
+            "kind": "struct",
+            "name": s["name"],
+            "desc": s["desc"],
+            "elev_rim": s["elev_rim"],
+            "elev_sump": s["elev_sump"],
+        })
+        geoms.append(Point(s["xy"]))
+
+    return rows, geoms, skipped, structures, length_gap
 
 
 def describe(ref: str, layer: str | None = None, crs_override: str | None = None) -> dict[str, Any]:
     path = resolve(ref)
     root = _root(path)
     crs, source = _read_crs(root, path, crs_override)
-    alignment = _pick_alignment(root, path, layer)
+    subject, el = _pick_subject(root, path, layer)
     units = _find(root, "Units")
     declared_unit = None
     if units is not None and len(units):
         declared_unit = units[0].get("linearUnit")
-    return {
+
+    info = {
         "kind": "landxml",
+        "subject": subject,
         "ref": str(path),
-        "layer": alignment.get("name"),
+        "layer": el.get("name"),
         "native_crs": crs,
         "crs_source": source,
-        "sta_start": float(alignment.get("staStart") or 0.0),
-        "length_declared": float(alignment.get("length") or 0.0),
         "landxml_linear_unit": declared_unit,
     }
+    if subject == "alignment":
+        info["sta_start"] = float(el.get("staStart") or 0.0)
+        info["length_declared"] = float(el.get("length") or 0.0)
+    else:
+        info["pipe_net_type"] = el.get("pipeNetType")
+        info["alignment_ref"] = el.get("alignmentRef")
+        info["pipes_declared"] = sum(1 for x in el.iter() if _tag(x) == "Pipe")
+        info["structs_declared"] = sum(1 for x in el.iter() if _tag(x) == "Struct")
+    return info
 
 
 def _unit_mismatch(declared: str | None, unit_name: str) -> bool:
@@ -210,14 +356,64 @@ def _unit_mismatch(declared: str | None, unit_name: str) -> bool:
     return False
 
 
+def _read_network(info, path, root, layer, crs):
+    """A pipe network: pipes as lines, structures as points."""
+    _subject, network = _pick_subject(root, path, layer)
+    rows, geoms, skipped, structures, length_gap = _network_features(network, path)
+    if not rows:
+        raise AdapterError(
+            f"{path}: pipe network {info['layer']!r} yielded no geometry "
+            f"({info['pipes_declared']} pipes, {info['structs_declared']} structures "
+            "declared, but no structure carried a <Center>)"
+        )
+
+    notes = []
+    if skipped:
+        notes.append(
+            f"left out {len(skipped)} of {info['pipes_declared']} pipes with no "
+            "usable geometry; see skipped in provenance"
+        )
+    if length_gap > 0.01:
+        notes.append(
+            f"pipe lengths differ from the declared <Pipe length> by up to "
+            f"{length_gap:.4f}; gisc measures structure centre to structure centre "
+            "in 2D, Civil 3D measures along the pipe"
+        )
+    diameters = sorted({r["diameter"] for r in rows if r.get("diameter")})
+    if diameters and min(diameters) >= 4:
+        notes.append(
+            f"<CircPipe diameter> values {diameters} are reported as written; the "
+            f"file declares linearUnit={info.get('landxml_linear_unit')!r} but these "
+            "read as inches, so gisc does not convert them"
+        )
+
+    gdf = gpd.GeoDataFrame(rows, geometry=geoms, crs=crs)
+    prov = {
+        **info,
+        **file_provenance(path),
+        "read_at": now(),
+        "features_in": int(len(gdf)),
+        "pipes": int(sum(1 for r in rows if r["kind"] == "pipe")),
+        "structures": int(sum(1 for r in rows if r["kind"] == "struct")),
+        "skipped": skipped,
+        "geometry_types": sorted({t for t in gdf.geom_type.dropna().unique()}),
+        "filter": f"PipeNetwork[name={info['layer']!r}]/Pipes+Structs",
+        "notes": notes,
+    }
+    return gdf, prov
+
+
 def read(ref: str, layer: str | None = None, crs_override: str | None = None):
     info = describe(ref, layer=layer, crs_override=crs_override)
     path = resolve(ref)
     root = _root(path)
+    crs = CRS.from_user_input(info["native_crs"])
+    if info["subject"] == "pipenetwork":
+        return _read_network(info, path, root, layer, crs)
+
     alignment = _pick_alignment(root, path, layer)
     line, notes = _centerline(alignment, path)
 
-    crs = CRS.from_user_input(info["native_crs"])
     unit = crs.axis_info[0].unit_name
     if _unit_mismatch(info.get("landxml_linear_unit"), unit):
         notes.append(

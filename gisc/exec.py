@@ -122,6 +122,16 @@ def _op_read(op, plan, env, prov, ctx):
         crs_override=op.get("crs_override"),
     )
     _require_crs(gdf, sid)
+
+    # A centreline is one feature. Without this, pointing --alignment at a pipe
+    # network merges 30 pipes into a single "centre line" and stations against it.
+    if op.get("expect") == "one_feature" and len(gdf) != 1:
+        raise UsageError(
+            f"{sid!r} must be a single feature to act as a centreline, but "
+            f"{source.ref} yielded {len(gdf)}. Name one with the layer option "
+            f"(--alignment-name for LandXML)."
+        )
+
     gdf = gdf.copy()
     gdf["gisc_src"] = sid
     gdf["gisc_fid"] = range(len(gdf))

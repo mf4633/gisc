@@ -68,8 +68,10 @@ def compile_plan(
 
     for sid in ids:
         op: dict[str, Any] = {"op": "read", "src": sid}
-        if sid == "alignment" and alignment_crs:
-            op["crs_override"] = alignment_crs
+        if sid == "alignment":
+            op["expect"] = "one_feature"
+            if alignment_crs:
+                op["crs_override"] = alignment_crs
         plan.ops.append(op)
     for sid in ids:
         plan.ops.append({"op": "reproject", "src": sid, "to": crs})

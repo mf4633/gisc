@@ -223,3 +223,47 @@ def test_a_much_larger_layer_still_finds_the_same_conflicts(tmp_path):
         names.append(f"NOISE-{i}")
     conflicts = run(tmp_path, utilities(tmp_path, geoms, names)).frame("conflicts")
     assert list(conflicts["name"]) == ["SS-REAL"]
+
+
+# -- a LandXML pipe network as the utility source --------------------------
+
+PIPENET = str(FIXTURES / "pipenetwork.xml")
+
+
+def test_a_pipe_network_can_be_the_utilities(tmp_path):
+    """The Civil 3D workflow: storm comes out as LandXML, not a GeoPackage."""
+    result = run(tmp_path, PIPENET)
+    conflicts = result.frame("conflicts").set_index("name")
+
+    # Two pipes and the two structures that sit 8 ft off the centre line.
+    assert sorted(conflicts.index) == ["MH-3", "MH-4", "P-CROSS", "P-PARALLEL"]
+    assert set(conflicts["kind"]) == {"pipe", "struct"}
+
+    assert conflicts.loc["P-CROSS", "sta_label"] == "12+00.00"
+    assert conflicts.loc["P-PARALLEL", "offset_ft"] == pytest.approx(8.0, abs=0.05)
+    assert conflicts.loc["MH-3", "offset_ft"] == pytest.approx(8.0, abs=0.05)
+
+    # Lines get a length, structures do not.
+    assert conflicts.loc["P-PARALLEL", "overlap_ft"] == pytest.approx(250.0, abs=0.5)
+    assert pd_isna(conflicts.loc["MH-3", "overlap_ac"]) if "overlap_ac" in conflicts else True
+
+
+def test_the_pipe_that_was_left_out_never_reaches_the_output(tmp_path):
+    result = run(tmp_path, PIPENET)
+    assert "P-DANGLING" not in set(result.frame("utilities")["name"])
+    prov = result.provenance["sources"]["utilities"]
+    assert prov["skipped"][0]["pipe"] == "P-DANGLING"
+
+
+def test_a_pipe_network_cannot_stand_in_for_the_alignment(tmp_path):
+    """Nine features cannot be a centre line, and must not be merged into one."""
+    from gisc.compile import compile_task
+    from gisc.exec import execute
+    from gisc.errors import UsageError
+
+    plan = compile_task(
+        "corridor.conflicts", alignment=PIPENET, utils=str(FIXTURES / "utilities.geojson"),
+        buffer_ft=15.0, crs="EPSG:2264", out_dir=tmp_path / "run",
+    )
+    with pytest.raises(UsageError, match="must be a single feature"):
+        execute(plan, tmp_path / "run")

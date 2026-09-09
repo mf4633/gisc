@@ -520,3 +520,92 @@ def test_profile_and_feature_inside_an_alignment_are_ignored():
     gdf, prov = landxml.read(str(EXPORT_SHAPE), layer="Alignment - M")
     assert gdf.geometry.iloc[0].geom_type == "LineString"
     assert prov["features_in"] == 1
+
+
+# -- pipe networks ---------------------------------------------------------
+
+PIPENET = FIXTURES / "pipenetwork.xml"
+
+
+def test_pipe_network_is_recognised_without_being_named():
+    info = landxml.describe(str(PIPENET))
+    assert info["subject"] == "pipenetwork"
+    assert info["layer"] == "Storm X"
+    assert info["pipe_net_type"] == "storm"
+    assert info["native_crs"] == "EPSG:2264"
+    assert info["pipes_declared"] == 4
+    assert info["structs_declared"] == 6
+
+
+def test_pipe_network_yields_pipes_as_lines_and_structures_as_points():
+    gdf, prov = landxml.read(str(PIPENET))
+    assert prov["pipes"] == 3          # one of the four has no usable geometry
+    assert prov["structures"] == 6
+    assert prov["features_in"] == 9
+    assert sorted(prov["geometry_types"]) == ["LineString", "Point"]
+
+    pipes = gdf[gdf["kind"] == "pipe"].set_index("name")
+    assert sorted(pipes.index) == ["P-CLEAR", "P-CROSS", "P-PARALLEL"]
+    # Geometry comes from the structures the pipe names, so the length is real.
+    assert pipes.loc["P-CROSS"].geometry.length == pytest.approx(120.0, abs=0.01)
+    assert pipes.loc["P-PARALLEL"].geometry.length == pytest.approx(250.0, abs=0.01)
+    assert pipes.loc["P-CROSS", "diameter"] == 24.0
+    assert pipes.loc["P-CROSS", "material"] == "Reinforced Concrete"
+    assert pipes.loc["P-CROSS", "from_struct"] == "MH-1"
+
+
+def test_a_pipe_whose_structure_is_missing_is_left_out_and_named():
+    """No geometry to vouch for means no feature -- and a reason on the record."""
+    _gdf, prov = landxml.read(str(PIPENET))
+    assert len(prov["skipped"]) == 1
+    skipped = prov["skipped"][0]
+    assert skipped["pipe"] == "P-DANGLING"
+    assert "Structure - (68)" in skipped["reason"]
+    assert any("left out 1 of 4 pipes" in n for n in prov["notes"])
+
+
+def test_structure_coordinates_are_northing_easting():
+    """<Center> is "northing easting". Swapping them is silent and fatal."""
+    gdf, _ = landxml.read(str(PIPENET))
+    mh1 = gdf[(gdf["kind"] == "struct") & (gdf["name"] == "MH-1")].iloc[0]
+    assert mh1.geometry.x == pytest.approx(905_200.0)   # easting
+    assert mh1.geometry.y == pytest.approx(674_940.0)   # northing
+
+
+def test_structures_keep_their_rim_and_sump():
+    gdf, _ = landxml.read(str(PIPENET))
+    mh1 = gdf[(gdf["kind"] == "struct") & (gdf["name"] == "MH-1")].iloc[0]
+    assert mh1["elev_rim"] == pytest.approx(2110.50)
+    assert mh1["elev_sump"] == pytest.approx(2100.10)
+
+
+def test_pipe_diameters_are_reported_as_written_not_converted():
+    """Civil 3D writes inches while Units says feet. gisc says so, and converts nothing."""
+    gdf, prov = landxml.read(str(PIPENET))
+    assert set(gdf[gdf["kind"] == "pipe"]["diameter"]) == {12.0, 18.0, 24.0}
+    note = next(n for n in prov["notes"] if "CircPipe" in n)
+    assert "read as inches" in note
+    assert "USSurveyFoot" in note
+
+
+def test_asking_for_a_network_by_name():
+    gdf, prov = landxml.read(str(PIPENET), layer="Storm X")
+    assert prov["layer"] == "Storm X"
+    assert len(gdf) == 9
+
+
+def test_a_network_name_that_is_not_there_lists_what_is():
+    with pytest.raises(AdapterError, match="Storm X"):
+        landxml.describe(str(PIPENET), layer="Storm Q")
+
+
+def test_a_pipe_network_is_not_an_alignment():
+    with pytest.raises(AdapterError, match="is a pipe network, not an alignment"):
+        landxml._pick_alignment(landxml._root(PIPENET), PIPENET, "Storm X")
+
+
+def test_a_landxml_with_neither_alignment_nor_network(tmp_path):
+    doc = ('<?xml version="1.0"?><LandXML><CoordinateSystem epsgCode="2264"/>'
+           '<Surfaces><Surface name="EG"/></Surfaces></LandXML>')
+    with pytest.raises(AdapterError, match="surfaces, parcels and point groups"):
+        landxml.describe(write(tmp_path / "surface.xml", doc))

@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Shaped like a Civil 3D <PipeNetwork> export, with invented coordinates on the
+  same design grid as alignment.xml (EPSG:2264, ftUS, origin 905000/675000).
+
+  Reproduces what real exports do:
+    - pipes carry no coordinates, only refStart/refEnd naming their structures
+    - <Center> is "northing easting", not easting northing
+    - <CircPipe diameter> reads as inches while Units declares USSurveyFoot
+    - a pipe references a structure that is not in the file at all
+
+  Laid out against alignment.xml's centre line:
+    P-CROSS  crosses it at STA 12+00
+    P-PARALLEL  runs 8 ft off it        -> inside a 15 ft corridor
+    P-CLEAR     runs 40 ft off it       -> outside
+    MH-3, MH-4  sit 8 ft off it         -> inside
+  and P-DANGLING has no geometry anyone can vouch for.
+-->
+<LandXML xmlns="http://www.landxml.org/schema/LandXML-1.2" version="1.2"
+         date="2026-09-09" time="09:00:00">
+  <Units>
+    <Imperial linearUnit="USSurveyFoot" areaUnit="squareFoot"
+              volumeUnit="cubicFeet" temperatureUnit="fahrenheit"
+              pressureUnit="inHG" angularUnit="decimal degrees"
+              directionUnit="decimal degrees"/>
+  </Units>
+  <CoordinateSystem desc="NAD83 North Carolina State Planes, US Foot"
+                    epsgCode="2264" horizontalDatum="NAD83"/>
+  <PipeNetworks>
+    <PipeNetwork name="Storm X" pipeNetType="storm" desc="">
+      <Structs>
+        <Struct name="MH-1" desc="Concentric Cylindrical Structure" elevRim="2110.50" elevSump="2100.10">
+          <Center>674940.0000 905200.0000</Center>
+          <CircStruct diameter="4." material="Reinforced Concrete" thickness="0.5"/>
+          <Invert elev="2100.10" flowDir="out" refPipe="P-CROSS"/>
+        </Struct>
+        <Struct name="MH-2" desc="Concentric Cylindrical Structure" elevRim="2111.20" elevSump="2100.60">
+          <Center>675060.0000 905200.0000</Center>
+          <CircStruct diameter="4." material="Reinforced Concrete" thickness="0.5"/>
+          <Invert elev="2100.60" flowDir="in" refPipe="P-CROSS"/>
+        </Struct>
+        <Struct name="MH-3" desc="Rectangular Structure Slab Top - Curb Inlet" elevRim="2120.00" elevSump="2112.40">
+          <Center>675158.0000 905900.0000</Center>
+          <RectStruct length="4." width="4." material="Reinforced Concrete" thickness="0.5"/>
+          <Invert elev="2112.40" flowDir="out" refPipe="P-PARALLEL"/>
+        </Struct>
+        <Struct name="MH-4" desc="Rectangular Structure Slab Top - Curb Inlet" elevRim="2121.00" elevSump="2111.90">
+          <Center>675158.0000 906150.0000</Center>
+          <RectStruct length="4." width="4." material="Reinforced Concrete" thickness="0.5"/>
+          <Invert elev="2111.90" flowDir="in" refPipe="P-PARALLEL"/>
+        </Struct>
+        <Struct name="MH-5" desc="Concentric Cylindrical Structure" elevRim="2125.00" elevSump="2116.00">
+          <Center>675190.0000 905900.0000</Center>
+          <CircStruct diameter="4." material="Reinforced Concrete" thickness="0.5"/>
+        </Struct>
+        <Struct name="MH-6" desc="Concentric Cylindrical Structure" elevRim="2125.80" elevSump="2115.40">
+          <Center>675190.0000 906150.0000</Center>
+          <CircStruct diameter="4." material="Reinforced Concrete" thickness="0.5"/>
+        </Struct>
+      </Structs>
+      <Pipes>
+        <Pipe name="P-CROSS" refStart="MH-1" refEnd="MH-2" desc="RCP Pipe"
+              length="120.000000000000" slope="0.004166666667">
+          <CircPipe diameter="24." material="Reinforced Concrete" thickness="0.1"/>
+        </Pipe>
+        <Pipe name="P-PARALLEL" refStart="MH-3" refEnd="MH-4" desc="RCP Pipe"
+              length="250.000000000000" slope="0.002000000000">
+          <CircPipe diameter="18." material="Reinforced Concrete" thickness="0.1"/>
+        </Pipe>
+        <Pipe name="P-CLEAR" refStart="MH-5" refEnd="MH-6" desc="HDPE Pipe"
+              length="250.000000000000" slope="0.002400000000">
+          <CircPipe diameter="12." material="HDPE" thickness="0.05"/>
+        </Pipe>
+        <Pipe name="P-DANGLING" refStart="MH-4" refEnd="Structure - (68)" desc="RCP Pipe"
+              length="88.000000000000" slope="0.003000000000">
+          <CircPipe diameter="18." material="Reinforced Concrete" thickness="0.1"/>
+        </Pipe>
+      </Pipes>
+    </PipeNetwork>
+  </PipeNetworks>
+</LandXML>

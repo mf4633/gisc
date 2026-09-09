@@ -303,7 +303,10 @@ def test_alignment_crs_override_reaches_the_plan(tmp_path):
     assert result.exit_code == 0, result.output
     plan = json.loads((out / "plan.json").read_text())
     assert plan["sources"][0]["crs_source"] == "user_override"
-    assert plan["ops"][0] == {"op": "read", "src": "alignment", "crs_override": "EPSG:4326"}
+    read_op = plan["ops"][0]
+    assert read_op["op"] == "read" and read_op["src"] == "alignment"
+    assert read_op["crs_override"] == "EPSG:4326"
+    assert read_op["expect"] == "one_feature"  # a centre line is one feature
 
 
 def test_alignment_name_picks_one_of_several(tmp_path):
