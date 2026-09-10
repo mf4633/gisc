@@ -137,7 +137,9 @@ def compile_cmd(
     """Compile the plan and run it."""
     out_dir = pathlib.Path(out) if out else pathlib.Path("./out") / _run_id()
     try:
-        cleared = claim_out_dir(out_dir)
+        # Compile first. Compiling can fail -- a missing input, an unreadable
+        # CRS -- and a run that never starts must not already have deleted the
+        # previous run's answers. Probing reads headers only.
         plan = compile_task(
             task,
             alignment=alignment, utils=utils, flood=flood, row=row,
@@ -145,6 +147,7 @@ def compile_cmd(
             layers=_layers(utils_layer, flood_layer, alignment_name),
             alignment_crs=alignment_crs,
         )
+        cleared = claim_out_dir(out_dir)
         write_plan(plan, out_dir)
         result = execute(plan, out_dir)
     except GiscError as exc:

@@ -4,11 +4,16 @@ Two subjects, because a Civil 3D project exports both and a corridor check
 needs both: ``<Alignment>`` is the centreline you measure from,
 ``<PipeNetwork>`` is the buried utility you are looking for.
 
-Alignments understand ``Line`` and ``Curve`` (circular arc), which is what an
-ordinary roadway or utility centreline is made of. Anything else -- spirals,
-irregular lines, a file with no CRS -- fails with a message that names the
-file and the element, rather than quietly producing a shape that is almost
-right.
+Alignments understand ``Line``, ``Curve`` (circular arc) and ``Spiral``
+(clothoid), which is what an ordinary roadway or utility centreline is made
+of. Anything else -- a non-clothoid transition, an irregular line, a file
+with no CRS -- fails with a message that names the file and the element,
+rather than quietly producing a shape that is almost right.
+
+``<StaEquation>`` is read, because ignoring one is the quietest way to be
+wrong that this format offers: the geometry stays perfect and every station
+past the equation is off by the size of the equation. See
+:mod:`gisc.stations`.
 
 Pipe geometry is not in the ``<Pipe>`` element. A pipe names the structures at
 its ends and the coordinates live on those, so a pipe whose structure is
@@ -28,9 +33,22 @@ from shapely.geometry import LineString, Point
 
 from gisc.adapters._common import file_provenance, now, resolve
 from gisc.errors import AdapterError, MissingCRSError
+from gisc.stations import Equation, Stationing
 
-# Chord tolerance when flattening an arc, in CRS units (ft or m).
+# Chord tolerance when flattening an arc or a spiral, in CRS units (ft or m).
 ARC_TOLERANCE = 0.01
+
+# How far an integrated clothoid may land from the ``<End>`` the file declares
+# before gisc stops believing the file. A correct clothoid closes to well under
+# a thousandth of a foot; anything near this means the length, the radii, the
+# rotation and the endpoints do not describe the same curve, and gisc would be
+# picking which of them to disbelieve.
+SPIRAL_CLOSURE_TOLERANCE = 0.05
+
+# Integration panels per emitted chord. The chord count already satisfies
+# ARC_TOLERANCE geometrically; these make the quadrature error irrelevant
+# beside it.
+SPIRAL_SUBSTEPS = 8
 
 
 def _tag(el: ET.Element) -> str:
@@ -92,7 +110,8 @@ def _read_crs(root: ET.Element, path, crs_override: str | None) -> tuple[str, st
     )
 
 
-def _arc(start, center, end, rot: str, path) -> list[tuple[float, float]]:
+def _arc(start, center, end, rot: str, path):
+    """Flatten a circular arc to chords. Returns the points and the exit heading."""
     (sx, sy), (cx, cy), (ex, ey) = start, center, end
     r = math.hypot(sx - cx, sy - cy)
     if r <= 0:
@@ -113,7 +132,193 @@ def _arc(start, center, end, rot: str, path) -> list[tuple[float, float]]:
         a = a0 + sweep * i / n
         pts.append((cx + r * math.cos(a), cy + r * math.sin(a)))
     pts[-1] = (ex, ey)  # land exactly on the declared endpoint
-    return pts
+    # Exit heading from a0 + sweep rather than a1: same angle, no branch cut.
+    heading = a0 + sweep + (math.pi / 2 if sweep > 0 else -math.pi / 2)
+    return pts, heading
+
+
+def _r(radius: float) -> str:
+    return "INF" if math.isinf(radius) else f"{radius:g}"
+
+
+def _radius(value: str | None, path, which: str) -> tuple[float, list[str]]:
+    """A spiral end radius. ``INF``, blank or absent all mean a tangent end."""
+    if value is None or not value.strip():
+        return math.inf, []
+    text = value.strip().upper()
+    if text in ("INF", "INFINITE", "INFINITY", "-INF"):
+        return math.inf, []
+    try:
+        r = float(text)
+    except ValueError:
+        raise AdapterError(
+            f"{path}: <Spiral {which}={value!r}> is neither a number nor INF"
+        ) from None
+    if r == 0:
+        # A zero-radius end is infinite curvature, which no spiral has. Every
+        # exporter that writes it means the tangent end. Say so rather than
+        # dividing by it.
+        return math.inf, [
+            f"<Spiral {which}> is zero, read as an infinite radius (a tangent "
+            "end); a zero radius is not a curve gisc could draw"
+        ]
+    return abs(r), []
+
+
+def _spiral_heading(el: ET.Element, start, prev_heading, path):
+    """The tangent direction at the spiral's start.
+
+    ``<PI>`` is the intersection of the tangents at the spiral's two ends, so
+    Start -> PI is the entry tangent whichever way round the spiral runs.
+    """
+    notes: list[str] = []
+    pi_el = _find(el, "PI")
+    if pi_el is not None:
+        px, py = _point(pi_el, path, "Spiral/PI")
+        dx, dy = px - start[0], py - start[1]
+        if math.hypot(dx, dy) > 1e-6:
+            heading = math.atan2(dy, dx)
+            if prev_heading is not None:
+                off = abs((heading - prev_heading + math.pi) % (2 * math.pi) - math.pi)
+                if off > math.radians(0.01):
+                    notes.append(
+                        f"<Spiral> enters {math.degrees(off):.4f} deg off the tangent "
+                        "of the element before it; gisc used the spiral's own <PI>"
+                    )
+            return heading, "PI", notes
+    if prev_heading is not None:
+        return prev_heading, "previous element", notes
+    raise AdapterError(
+        f"{path}: <Spiral> has no usable <PI> and nothing before it to take a "
+        "tangent from, so gisc cannot orient it. A spiral needs either a <PI> "
+        "distinct from its <Start>, or a preceding <Line> or <Curve>."
+    )
+
+
+def _clothoid(start, theta0: float, k1: float, k2: float, length: float,
+              sign: float, n: int):
+    """Integrate a clothoid: curvature ramps linearly from ``k1`` to ``k2``.
+
+    Heading is exact -- theta(s) = theta0 + sign*(k1*s + (k2-k1)*s^2/2L) -- so
+    the only approximation is the quadrature of its sine and cosine, done by
+    composite Simpson. One expression covers an entry spiral, an exit spiral
+    and a compound spiral running between two finite radii.
+    """
+    def theta(s: float) -> float:
+        return theta0 + sign * (k1 * s + (k2 - k1) * s * s / (2.0 * length))
+
+    panels = n * SPIRAL_SUBSTEPS
+    h = length / panels
+    x, y = start
+    pts: list[tuple[float, float]] = []
+    for j in range(panels):
+        s0 = j * h
+        t0, tm, t1 = theta(s0), theta(s0 + h / 2.0), theta(s0 + h)
+        x += h / 6.0 * (math.cos(t0) + 4.0 * math.cos(tm) + math.cos(t1))
+        y += h / 6.0 * (math.sin(t0) + 4.0 * math.sin(tm) + math.sin(t1))
+        if (j + 1) % SPIRAL_SUBSTEPS == 0:
+            pts.append((x, y))
+    return pts, theta(length)
+
+
+def _spiral(el: ET.Element, path, prev_heading: float | None):
+    """Flatten a ``<Spiral>`` to chords. Returns points, exit heading, notes."""
+    spi_type = (el.get("spiType") or "clothoid").strip().lower()
+    if spi_type != "clothoid":
+        raise AdapterError(
+            f"{path}: <Spiral spiType={el.get('spiType')!r}> is not a clothoid. "
+            "gisc flattens clothoid spirals only -- bloss, sinusoidal, cosine and "
+            "the cubic families are not implemented. Re-export the alignment as "
+            "chords, or hand gisc a GeoJSON LineString instead."
+        )
+
+    start = _point(_find(el, "Start"), path, "Spiral/Start")
+    end = _point(_find(el, "End"), path, "Spiral/End")
+    length = _maybe_float(el.get("length"))
+    if not length or length <= 0:
+        raise AdapterError(
+            f"{path}: <Spiral> needs a positive length, got {el.get('length')!r}"
+        )
+    rot = (el.get("rot") or "").lower()
+    if rot not in ("cw", "ccw"):
+        raise AdapterError(f"{path}: <Spiral> needs rot='cw' or rot='ccw', got {rot!r}")
+
+    r1, notes = _radius(el.get("radiusStart"), path, "radiusStart")
+    r2, more = _radius(el.get("radiusEnd"), path, "radiusEnd")
+    notes = list(notes) + more
+    if math.isinf(r1) and math.isinf(r2):
+        raise AdapterError(
+            f"{path}: <Spiral> is infinite-radius at both ends, which is a line, "
+            "not a spiral"
+        )
+    k1 = 0.0 if math.isinf(r1) else 1.0 / r1
+    k2 = 0.0 if math.isinf(r2) else 1.0 / r2
+
+    theta0, how, heading_notes = _spiral_heading(el, start, prev_heading, path)
+    notes += heading_notes
+
+    # Chord count from the tightest radius, the same rule the arc uses.
+    r_min = 1.0 / max(k1, k2)
+    step = 2 * math.acos(max(-1.0, min(1.0, 1 - ARC_TOLERANCE / r_min)))
+    deflection = abs(length * (k1 + k2) / 2.0)
+    # Curvature is not constant along a spiral, so the chord count follows the
+    # tightest end, not the average: the chord nearest the small-radius end
+    # turns about twice as far as the mean chord does, and it is the one that
+    # has to satisfy the tolerance.
+    worst_chord_turn = max(k1, k2) * length
+    n = max(2, min(20_000, math.ceil(worst_chord_turn / max(step, 1e-9))))
+
+    sign = 1.0 if rot == "ccw" else -1.0
+    pts, heading = _clothoid(start, theta0, k1, k2, length, sign, n)
+    closure = math.dist(pts[-1], end)
+
+    if closure > SPIRAL_CLOSURE_TOLERANCE:
+        # Before blaming the file, check the one mistake that produces exactly
+        # this: a rotation that disagrees with the geometry.
+        other, _ = _clothoid(start, theta0, k1, k2, length, -sign, n)
+        hint = ""
+        if math.dist(other[-1], end) < closure / 10.0:
+            hint = (
+                f" It closes to {math.dist(other[-1], end):.4f} with "
+                f"rot={'cw' if rot == 'ccw' else 'ccw'!r}, so the declared rotation "
+                "is probably the wrong way round."
+            )
+        raise AdapterError(
+            f"{path}: <Spiral> does not close. Integrating length={length:g} from "
+            f"radiusStart={_r(r1)} to radiusEnd={_r(r2)} rot={rot!r}, starting on "
+            f"the tangent from its {how}, lands {closure:.4f} CRS units from the "
+            f"declared <End>. gisc will not stretch a curve onto an endpoint it "
+            f"does not reach.{hint}"
+        )
+    if closure > 0.001:
+        notes.append(
+            f"<Spiral> integration closed {closure:.4f} CRS units from the declared "
+            "<End>; gisc snapped the last point to <End>"
+        )
+    pts[-1] = end
+
+    declared_theta = _maybe_float(el.get("theta"))
+    if declared_theta is not None:
+        degrees = math.degrees(deflection)
+        if abs(declared_theta - degrees) > 0.01:
+            if abs(declared_theta - deflection) <= 1e-4:
+                notes.append(
+                    "<Spiral theta> is in radians, not the file's declared angular "
+                    f"unit; gisc used its own computed deflection of {degrees:.6f} deg"
+                )
+            else:
+                notes.append(
+                    f"<Spiral theta={declared_theta:g}> disagrees with the "
+                    f"{degrees:.6f} deg gisc computes from length and radii; gisc "
+                    "used the computed value"
+                )
+
+    notes.append(
+        f"flattened a <Spiral> ({_r(r1)} -> {_r(r2)}, {length:g} long, "
+        f"{math.degrees(deflection):.4f} deg) to {n} chords at {ARC_TOLERANCE} "
+        f"CRS units, oriented from its {how}"
+    )
+    return [start, *pts], heading, notes
 
 
 def _centerline(alignment: ET.Element, path) -> tuple[LineString, list[str]]:
@@ -123,6 +328,9 @@ def _centerline(alignment: ET.Element, path) -> tuple[LineString, list[str]]:
 
     coords: list[tuple[float, float]] = []
     notes: list[str] = []
+    # The tangent leaving the last element, so a spiral with no <PI> can be
+    # oriented. None until the first element has been read.
+    heading: float | None = None
 
     for el in geom:
         kind = _tag(el)
@@ -130,19 +338,25 @@ def _centerline(alignment: ET.Element, path) -> tuple[LineString, list[str]]:
             start = _point(_find(el, "Start"), path, "Line/Start")
             end = _point(_find(el, "End"), path, "Line/End")
             seg = [start, end]
+            heading = math.atan2(end[1] - start[1], end[0] - start[0])
         elif kind == "Curve":
             start = _point(_find(el, "Start"), path, "Curve/Start")
             center = _point(_find(el, "Center"), path, "Curve/Center")
             end = _point(_find(el, "End"), path, "Curve/End")
-            seg = [start, *_arc(start, center, end, (el.get("rot") or "").lower(), path)]
+            arc, heading = _arc(start, center, end, (el.get("rot") or "").lower(), path)
+            seg = [start, *arc]
             notes.append(
                 f"flattened a <Curve> to {len(seg)} chords at {ARC_TOLERANCE} CRS units"
             )
+        elif kind == "Spiral":
+            seg, heading, spiral_notes = _spiral(el, path, heading)
+            notes += spiral_notes
         else:
             raise AdapterError(
                 f"{path}: <CoordGeom> contains <{kind}>, which gisc does not parse. "
-                "Only <Line> and <Curve> are supported; re-export the alignment as "
-                "chords, or hand gisc a GeoJSON LineString instead."
+                "Only <Line>, <Curve> and <Spiral> (clothoid) are supported; "
+                "re-export the alignment as chords, or hand gisc a GeoJSON "
+                "LineString instead."
             )
 
         if coords:
@@ -314,6 +528,40 @@ def _network_features(network: ET.Element, path):
     return rows, geoms, skipped, structures, length_gap
 
 
+def _equations(alignment: ET.Element, path) -> list[Equation]:
+    """Read ``<StaEquation>`` children into the form :mod:`gisc.stations` wants.
+
+    ``staInternal`` is the raw station, the only one of the three attributes
+    tied to the geometry. Exporters that omit it give ``staBack`` instead, and
+    the raw station follows from the equations already applied.
+    """
+    equations: list[Equation] = []
+    offset = 0.0
+    for el in _findall(alignment, "StaEquation"):
+        ahead = _maybe_float(el.get("staAhead"))
+        back = _maybe_float(el.get("staBack"))
+        internal = _maybe_float(el.get("staInternal"))
+        if ahead is None:
+            raise AdapterError(
+                f"{path}: <StaEquation> has no staAhead, so it does not say what "
+                "the stationing becomes"
+            )
+        if internal is None and back is None:
+            raise AdapterError(
+                f"{path}: <StaEquation staAhead={ahead:g}> gives neither "
+                "staInternal nor staBack, so gisc cannot place it on the alignment"
+            )
+        if internal is None:
+            internal = back - offset
+        if back is None:
+            back = internal + offset
+        equations.append(
+            Equation(internal=internal, back=back, ahead=ahead, desc=el.get("desc"))
+        )
+        offset = ahead - internal
+    return equations
+
+
 def describe(ref: str, layer: str | None = None, crs_override: str | None = None) -> dict[str, Any]:
     path = resolve(ref)
     root = _root(path)
@@ -336,6 +584,9 @@ def describe(ref: str, layer: str | None = None, crs_override: str | None = None
     if subject == "alignment":
         info["sta_start"] = float(el.get("staStart") or 0.0)
         info["length_declared"] = float(el.get("length") or 0.0)
+        info["sta_equations_declared"] = sum(
+            1 for x in el.iter() if _tag(x) == "StaEquation"
+        )
     else:
         info["pipe_net_type"] = el.get("pipeNetType")
         info["alignment_ref"] = el.get("alignmentRef")
@@ -413,6 +664,14 @@ def read(ref: str, layer: str | None = None, crs_override: str | None = None):
 
     alignment = _pick_alignment(root, path, layer)
     line, notes = _centerline(alignment, path)
+    stationing = Stationing(info["sta_start"], _equations(alignment, path))
+    if stationing.equated:
+        notes.append(
+            f"alignment carries {len(stationing.equations)} station equation(s); "
+            "the stations gisc reports are equated, and the regions and the raw "
+            "stations behind them are in provenance"
+        )
+    notes += stationing.notes
 
     unit = crs.axis_info[0].unit_name
     if _unit_mismatch(info.get("landxml_linear_unit"), unit):
@@ -433,6 +692,7 @@ def read(ref: str, layer: str | None = None, crs_override: str | None = None):
             "name": [info["layer"]],
             "sta_start": [info["sta_start"]],
             "length": [length],
+            Stationing.COLUMN: [stationing.to_json()],
         },
         geometry=[line],
         crs=crs,
@@ -444,6 +704,7 @@ def read(ref: str, layer: str | None = None, crs_override: str | None = None):
         "features_in": 1,
         "vertices": len(line.coords),
         "length_computed": length,
+        "stationing": stationing.to_dict(),
         "geometry_types": ["LineString"],
         "filter": f"Alignment[name={info['layer']!r}]/CoordGeom",
         "notes": notes,

@@ -23,6 +23,7 @@ from gisc import __version__, adapters, units
 from gisc.adapters._common import now
 from gisc.errors import MissingCRSError, UsageError
 from gisc.ir import Plan, validate
+from gisc.stations import Stationing
 
 OUT_CRS = "EPSG:4326"  # RFC 7946. Analysis CRS is recorded in provenance.
 
@@ -159,9 +160,19 @@ def _op_buffer(op, plan, env, prov, ctx):
     _require_crs(gdf, src)
     merged = gdf.geometry.union_all()
     rep = merged.representative_point()
-    conv = units.buffer_distance(gdf.crs, float(op["dist_ft"]), (rep.x, rep.y))
+    # Corners and centre of the bounding box, so the scale factor's drift over
+    # what is being buffered is measured rather than assumed away. The corners
+    # need not lie on the geometry: they bound it, so the range comes out at
+    # least as wide as the truth, which is the safe direction to be wrong in.
+    x0, y0, x1, y1 = merged.bounds
+    extent = [(x0, y0), (x1, y1), ((x0 + x1) / 2.0, (y0 + y1) / 2.0)]
+    conv = units.buffer_distance(
+        gdf.crs, float(op["dist_ft"]), (rep.x, rep.y), extent=extent
+    )
     ctx["buffer"] = conv
-    poly = merged.buffer(conv["distance_in_crs_units"])
+    poly = merged.buffer(
+        conv["distance_in_crs_units"], quad_segs=conv["quad_segs"]
+    )
     env[out] = gpd.GeoDataFrame(
         {"gisc_src": [f"buffer({src})"], "gisc_fid": [0], "dist_ft": [conv["dist_ft"]]},
         geometry=[poly],
@@ -239,35 +250,59 @@ def _op_sample(op, plan, env, prov, ctx):
 
     line = ref.geometry.union_all()
     sta_start = float(ref["sta_start"].iloc[0]) if "sta_start" in ref.columns else 0.0
+    # A station is not a distance. If the alignment carries station equations,
+    # the drawing's stations jump and gisc has to jump with them.
+    stationing = Stationing.from_json(
+        sta_start,
+        ref[Stationing.COLUMN].iloc[0] if Stationing.COLUMN in ref.columns else None,
+    )
     unit = ref.crs.axis_info[0].unit_name
 
-    stations, begins, ends, offsets, sides = [], [], [], [], []
+    raws, raw_begins, raw_ends, offsets, sides = [], [], [], [], []
     for geom in target.geometry:
         if geom is None or geom.is_empty:
-            for col in (stations, begins, ends, offsets, sides):
+            for col in (raws, raw_begins, raw_ends, offsets, sides):
                 col.append(None)
             continue
         pa, pg = nearest_points(line, geom)
         d_along = line.project(pa)
         # Stations stay in the design unit; converting them would contradict
-        # the drawing. Offsets are reported in feet.
-        stations.append(sta_start + d_along)
+        # the drawing. Offsets are reported in international feet.
+        raws.append(stationing.raw(d_along))
         offsets.append(units.grid_to_ft(pa.distance(pg), ref.crs))
         sides.append(_side(line, d_along, pa, pg))
 
         # How far along the alignment the feature reaches, so a polygon is not
-        # reduced to one misleading station.
-        along = [line.project(Point(xy)) for xy in shapely.get_coordinates(geom)]
-        begins.append(sta_start + min(along))
-        ends.append(sta_start + max(along))
+        # reduced to one misleading station. Named for what it is: this must not
+        # shadow ``along``, which is the id of the centreline being measured
+        # against and is reported in provenance.
+        reach = [line.project(Point(xy)) for xy in shapely.get_coordinates(geom)]
+        raw_begins.append(stationing.raw(min(reach)))
+        raw_ends.append(stationing.raw(max(reach)))
+
+    stations = [stationing.display(v) for v in raws]
+    begins = [stationing.display(v) for v in raw_begins]
+    ends = [stationing.display(v) for v in raw_ends]
+    regions = [None if v is None else stationing.region_of(v).index for v in raws]
+    reg_b = [None if v is None else stationing.region_of(v).index for v in raw_begins]
+    reg_e = [None if v is None else stationing.region_of(v).index for v in raw_ends]
 
     hit = env[src].copy()  # keep the analysis-CRS geometry
     hit["sta"] = [None if v is None else round(v, 2) for v in stations]
     hit["sta_begin"] = [None if v is None else round(v, 2) for v in begins]
     hit["sta_end"] = [None if v is None else round(v, 2) for v in ends]
-    hit["sta_label"] = [_station_range(b, e) for b, e in zip(begins, ends)]
+    hit["sta_label"] = [
+        _station_range(b, e, rb, re_, cb, ce)
+        for b, e, rb, re_, cb, ce in zip(begins, ends, raw_begins, raw_ends, reg_b, reg_e)
+    ]
     hit["offset_ft"] = [None if o is None else round(o, 2) for o in offsets]
     hit["side"] = sides
+    if stationing.equated:
+        # Only when they exist, so the ordinary case keeps a clean table. With
+        # an overlap equation a station names two points, and the region is the
+        # rest of the address; the raw station is what ties it back to geometry.
+        hit["sta_region"] = regions
+        hit["sta_raw"] = [None if v is None else round(v, 2) for v in raws]
     env[out] = hit
     return {
         "along": along,
@@ -275,6 +310,8 @@ def _op_sample(op, plan, env, prov, ctx):
         "measured_in_source": where,
         "sta_unit": unit,
         "sta_start": sta_start,
+        "offset_unit": "international foot",
+        "stationing": stationing.to_dict(),
         "sampled": int(len(hit)),
     }
 
@@ -292,12 +329,27 @@ def _side(line, d_along: float, pa: Point, pg: Point) -> str | None:
     return "L" if cross > 0 else "R"
 
 
-def _station_range(begin: float | None, end: float | None) -> str | None:
-    """A single station for a crossing, a range for anything with extent."""
+def _station_range(begin: float | None, end: float | None,
+                   raw_begin: float | None = None, raw_end: float | None = None,
+                   region_begin: int | None = None,
+                   region_end: int | None = None) -> str | None:
+    """A single station for a crossing, a range for anything with extent.
+
+    Extent is judged on the raw stations when they are known, because across a
+    station equation the displayed stations are not a length: a 50 ft pipe can
+    read 14+00 to 20+50. When a feature does straddle an equation the label
+    names both regions, since neither station alone locates it.
+    """
     if begin is None or end is None:
         return None
-    if end - begin < 1.0:
+    extent = (end - begin) if raw_begin is None or raw_end is None else (raw_end - raw_begin)
+    if extent < 1.0:
         return _station_label((begin + end) / 2.0)
+    if region_begin is not None and region_begin != region_end:
+        return (
+            f"{_station_label(begin)} (R{region_begin}) - "
+            f"{_station_label(end)} (R{region_end})"
+        )
     return f"{_station_label(begin)} - {_station_label(end)}"
 
 

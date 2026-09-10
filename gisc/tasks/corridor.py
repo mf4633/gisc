@@ -135,7 +135,9 @@ def summary(result, out_dir: pathlib.Path) -> str:
         f"- analysis CRS: **{prov['crs_analysis']}**   output CRS: {prov['crs_out']}",
         f"- buffer: **{plan.buffer_ft:g} ft** on the ground "
         f"= {buf.get('distance_in_crs_units', float('nan')):.4f} {buf.get('crs_unit', '?')} "
-        f"(point scale factor {buf.get('point_scale_factor', float('nan')):.6f})",
+        f"(point scale factor {buf.get('point_scale_factor', float('nan')):.6f}, "
+        f"{buf.get('quad_segs', '?')} segments/quadrant "
+        f"= {buf.get('chord_error_ft', float('nan')):.4f} ft of arc error)",
         "",
         "## Sources read",
         "",
@@ -204,6 +206,9 @@ def summary(result, out_dir: pathlib.Path) -> str:
     aln = prov["sources"].get("alignment", {})
     if aln.get("notes"):
         lines += ["## Alignment notes", ""] + [f"- {n}" for n in aln["notes"]] + [""]
+
+    for note in buf.get("notes", []):
+        lines += [f"> {note}", ""]
 
     if str(prov["crs_analysis"]).upper() == "EPSG:3857":
         lines += [
