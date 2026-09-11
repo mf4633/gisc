@@ -326,3 +326,31 @@ def test_alignment_name_picks_one_of_several(tmp_path):
     assert named.exit_code == 0, named.output
     plan = json.loads((out / "plan.json").read_text())
     assert plan["sources"][0]["layer"] == "CL-ALT"
+
+
+# -- the console entry point ------------------------------------------------
+#
+# Every command catches GiscError itself, so main()'s handler only fires for one
+# that got past them. It is still the function the installed `gisc` script calls,
+# and the last place an exit code can be set, so it is worth pinning.
+
+
+def test_main_maps_an_escaped_error_to_its_exit_code(monkeypatch, capsys):
+    import gisc.cli as cli
+
+    def leaks():
+        raise StubError("postgis adapter is not implemented.")
+
+    monkeypatch.setattr(cli, "app", leaks)
+    with pytest.raises(SystemExit) as exit_info:
+        cli.main()
+
+    assert exit_info.value.code == 5
+    assert "postgis adapter is not implemented" in capsys.readouterr().err
+
+
+def test_main_lets_a_clean_run_return_normally(monkeypatch):
+    import gisc.cli as cli
+
+    monkeypatch.setattr(cli, "app", lambda: None)
+    cli.main()  # must not raise, and must not call sys.exit
