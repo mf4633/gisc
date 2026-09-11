@@ -11,6 +11,8 @@ import dataclasses
 import hashlib
 import json
 import pathlib
+import shutil
+import uuid
 from typing import Any
 
 import geopandas as gpd
@@ -50,25 +52,70 @@ class Result:
 ALWAYS_WRITES = ("plan.json", "provenance.json", "summary.md")
 
 
-def claim_out_dir(out_dir: pathlib.Path | str) -> list[str]:
-    """Take ownership of the output folder, clearing a previous run's artifacts.
+@dataclasses.dataclass
+class Claim:
+    """Ownership of an output folder, held for the length of one run.
+
+    The previous run is moved aside rather than deleted, so a run that fails
+    part way through -- a malformed geometry, an adapter that gives out on the
+    third source -- can put it back. Deleting first and writing second means
+    any failure after the delete costs the reader the answers they already had,
+    and leaves the folder holding a plan.json with no provenance.json beside
+    it: a shape gisc refuses to write into, so the next run cannot start
+    either.
+    """
+
+    out_dir: pathlib.Path
+    cleared: list[str]
+    aside: pathlib.Path | None = None
+    created: bool = False
+    settled: bool = False
+
+    def commit(self) -> None:
+        """The run finished. Let go of the run it replaced."""
+        if self.settled:
+            return
+        self.settled = True
+        if self.aside is not None and self.aside.is_dir():
+            shutil.rmtree(self.aside, ignore_errors=True)
+
+    def rollback(self) -> None:
+        """The run failed. Put the folder back the way it was found."""
+        if self.settled:
+            return
+        self.settled = True
+        if self.out_dir.is_dir():
+            for entry in self.out_dir.iterdir():
+                if entry.is_file():
+                    entry.unlink()
+        if self.aside is not None and self.aside.is_dir():
+            for entry in self.aside.iterdir():
+                entry.replace(self.out_dir / entry.name)
+            self.aside.rmdir()
+        elif self.created and self.out_dir.is_dir() and not any(self.out_dir.iterdir()):
+            # gisc made this folder for a run that never happened.
+            self.out_dir.rmdir()
+
+
+def claim_out_dir(out_dir: pathlib.Path | str) -> Claim:
+    """Take ownership of the output folder, setting a previous run aside.
 
     A run folder must describe exactly one run. Left alone, a second run with
     fewer inputs would leave the first run's ``flood.geojson`` sitting next to
     a ``provenance.json`` that never mentions it -- an output nobody can trace,
     which is the one thing gisc exists to prevent.
 
-    Only files a previous gisc run recorded writing are removed. A folder gisc
-    did not write is refused, so a mistyped --out never deletes anyone's work.
+    Only files a previous gisc run recorded writing are moved. A folder gisc
+    did not write is refused, so a mistyped --out never touches anyone's work.
     """
     out_dir = pathlib.Path(out_dir)
     if not out_dir.exists():
         out_dir.mkdir(parents=True)
-        return []
+        return Claim(out_dir=out_dir, cleared=[], created=True)
 
     entries = sorted(out_dir.iterdir(), key=lambda p: p.name)
     if not entries:
-        return []
+        return Claim(out_dir=out_dir, cleared=[])
 
     marker = out_dir / "provenance.json"
     if not marker.is_file():
@@ -90,12 +137,23 @@ def claim_out_dir(out_dir: pathlib.Path | str) -> list[str]:
             f"not account for ({shown}). Point --out at an empty folder."
         )
 
-    removed = []
+    # A sibling, so it is on the same filesystem as the folder it came from and
+    # a restore is a rename rather than a copy that could itself fail.
+    aside = out_dir.parent / f".gisc-rollback-{uuid.uuid4().hex[:8]}"
+    try:
+        aside.mkdir(parents=True)
+    except OSError as exc:
+        raise UsageError(
+            f"cannot set aside the previous run in {out_dir.parent}: {exc}. gisc "
+            "keeps a copy until the new run succeeds, so it needs to write there."
+        ) from exc
+
+    moved = []
     for entry in entries:
         if entry.is_file():
-            entry.unlink()
-            removed.append(entry.name)
-    return removed
+            entry.replace(aside / entry.name)
+            moved.append(entry.name)
+    return Claim(out_dir=out_dir, cleared=moved, aside=aside)
 
 
 def _sha256(path: pathlib.Path) -> str:

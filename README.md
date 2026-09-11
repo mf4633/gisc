@@ -19,9 +19,10 @@ compiled), `conflicts.geojson`, `flood.geojson`, `summary.md`, and `provenance.j
 input. Every emitted feature carries the source it came from; if gisc cannot say
 where a geometry came from, it does not emit it. A missing CRS is a non-zero exit,
 never a guess. A run folder belongs to one run: gisc clears a previous run's
-artifacts, records what it cleared, and refuses any folder it did not write — but
-only once the new run has compiled, so a mistyped input never costs you the answers
-you already had.
+artifacts, records what it cleared, and refuses any folder it did not write. The
+clearing is undone if anything goes wrong — the previous run is set aside, not
+deleted, and put back on any failure — so a run either replaces the last one
+completely or leaves it exactly as it was.
 
 **Task:** `corridor.conflicts` — what is inside N feet of an alignment. **Ops:**
 `read, reproject, buffer, intersect, sample, write`, and nothing else.

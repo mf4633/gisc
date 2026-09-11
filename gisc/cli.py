@@ -136,6 +136,7 @@ def compile_cmd(
 ) -> None:
     """Compile the plan and run it."""
     out_dir = pathlib.Path(out) if out else pathlib.Path("./out") / _run_id()
+    claim = None
     try:
         # Compile first. Compiling can fail -- a missing input, an unreadable
         # CRS -- and a run that never starts must not already have deleted the
@@ -147,27 +148,36 @@ def compile_cmd(
             layers=_layers(utils_layer, flood_layer, alignment_name),
             alignment_crs=alignment_crs,
         )
-        cleared = claim_out_dir(out_dir)
+        claim = claim_out_dir(out_dir)
         write_plan(plan, out_dir)
         result = execute(plan, out_dir)
+
+        # Rewrite the plan: reading resolved each source's real CRS.
+        write_plan(plan, out_dir)
+
+        summary = TASKS[task].summary(result, out_dir)
+        (out_dir / "summary.md").write_text(summary, encoding="utf-8")
+        # Every file in the folder is listed, provenance.json included -- a
+        # reader checking "is everything here accounted for?" must find nothing
+        # left over. It cannot carry its own sha256, so it records a path only.
+        for name in ("plan.json", "summary.md", "provenance.json"):
+            result.provenance["outputs"][name] = {"path": str((out_dir / name).resolve())}
+        if claim.cleared:
+            result.provenance["cleared_from_previous_run"] = claim.cleared
+        (out_dir / "provenance.json").write_text(
+            json.dumps(result.provenance, indent=2, default=str) + "\n", encoding="utf-8"
+        )
     except GiscError as exc:
+        # Everything above is undone together or not at all: a half-written run
+        # folder is worse than no run at all, because the next one cannot start.
+        if claim is not None:
+            claim.rollback()
         _fail(exc)
-
-    # Rewrite the plan: reading resolved each source's real CRS.
-    write_plan(plan, out_dir)
-
-    summary = TASKS[task].summary(result, out_dir)
-    (out_dir / "summary.md").write_text(summary, encoding="utf-8")
-    # Every file in the folder is listed, provenance.json included -- a reader
-    # checking "is everything here accounted for?" must find nothing left over.
-    # It cannot carry its own sha256, so it records a path only.
-    for name in ("plan.json", "summary.md", "provenance.json"):
-        result.provenance["outputs"][name] = {"path": str((out_dir / name).resolve())}
-    if cleared:
-        result.provenance["cleared_from_previous_run"] = cleared
-    (out_dir / "provenance.json").write_text(
-        json.dumps(result.provenance, indent=2, default=str) + "\n", encoding="utf-8"
-    )
+    except BaseException:
+        if claim is not None:
+            claim.rollback()
+        raise
+    claim.commit()
 
     if quiet:
         typer.echo(str(out_dir.resolve()))
