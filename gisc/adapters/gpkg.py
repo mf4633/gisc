@@ -20,7 +20,9 @@ def _layers(path) -> list[str]:
 
 def _pick_layer(path, layer: str | None) -> str:
     names = _layers(path)
-    if not names:
+    # Reaching this wants a valid GeoPackage holding no vector layer at all,
+    # which nothing in the civil toolchain writes.
+    if not names:  # pragma: no cover
         raise AdapterError(f"{path}: GeoPackage has no vector layers")
     if layer is None:
         if len(names) > 1:
@@ -58,7 +60,9 @@ def read(ref: str, layer: str | None = None, crs_override: str | None = None):
     path = resolve(ref)
     try:
         gdf = gpd.read_file(path, layer=info["layer"])
-    except Exception as exc:  # noqa: BLE001
+    # describe() listed this layer a moment ago, so reaching this wants the file
+    # to have changed underneath us between the two reads.
+    except Exception as exc:  # noqa: BLE001  # pragma: no cover
         raise AdapterError(f"{path}: GeoPackage read failed: {exc}") from exc
 
     if crs_override:

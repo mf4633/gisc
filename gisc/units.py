@@ -63,7 +63,11 @@ def scale_factor(crs: Any, at_xy: tuple[float, float]) -> dict[str, Any]:
     to_xy = Transformer.from_crs("EPSG:4326", crs, always_xy=True)
 
     lon, lat = to_ll.transform(*at_xy)
-    if not (math.isfinite(lon) and math.isfinite(lat)):
+    # pyproj clamps an out-of-domain point to latitude -90 and returns a finite
+    # number rather than inf, so in practice the scale factor check below is what
+    # catches data that is not where its CRS says it is. Kept against a pyproj
+    # that stops clamping, which would make this the first thing to notice.
+    if not (math.isfinite(lon) and math.isfinite(lat)):  # pragma: no cover
         raise UsageError(
             f"point {at_xy} does not transform out of {crs.to_string()}; the data is "
             "probably not where the CRS says it is."

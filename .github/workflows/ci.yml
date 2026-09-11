@@ -33,7 +33,9 @@ jobs:
           pip install -e ".[dev]" pytest-cov
 
       - name: Test
-        run: pytest -q --cov=gisc --cov-report=term-missing
+        # 100% means every reachable line. The guards that no input can reach
+        # carry "pragma: no cover" and say why, so this stays enforceable.
+        run: pytest -q --cov=gisc --cov-report=term-missing --cov-fail-under=100
 
       - name: The one command in the README must work
         shell: bash

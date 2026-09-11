@@ -67,7 +67,9 @@ loudly and names the element.
 **Stubbed:** `postgis` and `fema` (NFHL) — both parse their input and fail with the
 exact SQL or HTTP request they would issue.
 
-**Tested:** 327 tests, 99% line coverage, plus acceptance checks against real tools.
+**Tested:** 339 tests, 100% line coverage, enforced in CI. Four guards no input can
+reach are marked `pragma: no cover` with the reason, rather than mocked into a
+number. Plus acceptance checks against real tools.
 Two alignments built in **Autodesk Civil 3D 2023** over COM:
 
 | | Civil 3D vs gisc |
