@@ -2,6 +2,21 @@
 
 Keep this small and stable. The whole point of gisc is that ``plan.json`` is a
 complete, readable statement of what will happen before anything happens.
+
+That claim was untested while there was one task, so a second one was written
+to try to break it -- ``alignment.crossings``, deliberately a different shape
+of question: nothing to buffer, and an answer that is a point existing in
+neither input until the intersection makes it. The op set survived unchanged,
+which is the part worth believing. Two things did not:
+
+* ``buffer_ft`` was a **required** field here, so a task with no corridor had
+  to name a corridor width. It is optional now, and the buffer op's own
+  ``dist_ft`` is the real home for it.
+* ``intersect`` always returned source geometry -- right for "which pipe is
+  near me", useless for "where does it cross". It takes a ``geometry`` mode.
+
+Neither needed a seventh op, but neither was free either. Read "every task"
+as a claim with two data points behind it, not a law.
 """
 
 from __future__ import annotations
@@ -52,7 +67,11 @@ class Plan:
 
     task: str
     crs: str
-    buffer_ft: float
+    # Only tasks that buffer carry this. It stays on the Plan because the
+    # summary reads it, but the buffer op already carries dist_ft, so a task
+    # that never buffers -- alignment.crossings -- simply leaves it unset
+    # rather than inventing a distance it does not use.
+    buffer_ft: float | None = None
     sources: list[Source] = dataclasses.field(default_factory=list)
     ops: list[dict[str, Any]] = dataclasses.field(default_factory=list)
     outputs: dict[str, str] = dataclasses.field(default_factory=dict)
@@ -68,10 +87,11 @@ class Plan:
         d: dict[str, Any] = {
             "task": self.task,
             "crs": self.crs,
-            "buffer_ft": self.buffer_ft,
             "sources": [s.to_dict() for s in self.sources],
             "ops": self.ops,
         }
+        if self.buffer_ft is not None:
+            d["buffer_ft"] = self.buffer_ft
         if self.outputs:
             d["outputs"] = self.outputs
         if self.notes:
