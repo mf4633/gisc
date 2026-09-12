@@ -128,12 +128,13 @@ def summary(result, out_dir: pathlib.Path) -> str:
     """A human-readable account of the run. Counts, CRS, and what was touched."""
     plan, prov = result.plan, result.provenance
     buf = prov.get("buffer") or {}
+    dist_ft = plan.buffer_ft if plan.buffer_ft is not None else buf.get("dist_ft")
     lines = [
         f"# {plan.task}",
         "",
         f"- run: `{out_dir.name}`  ({prov['started_at']} -> {prov['finished_at']})",
         f"- analysis CRS: **{prov['crs_analysis']}**   output CRS: {prov['crs_out']}",
-        f"- buffer: **{plan.buffer_ft:g} ft** on the ground "
+        f"- buffer: **{dist_ft:g} ft** on the ground "
         f"= {buf.get('distance_in_crs_units', float('nan')):.4f} {buf.get('crs_unit', '?')} "
         f"(point scale factor {buf.get('point_scale_factor', float('nan')):.6f}, "
         f"{buf.get('quad_segs', '?')} segments/quadrant "
@@ -214,7 +215,7 @@ def summary(result, out_dir: pathlib.Path) -> str:
         lines += [
             "> Analysis ran in EPSG:3857, which is not a survey-grade projection. "
             f"gisc corrected the buffer for a point scale factor of "
-            f"{buf.get('point_scale_factor', float('nan')):.4f}, so the {plan.buffer_ft:g} ft "
+            f"{buf.get('point_scale_factor', float('nan')):.4f}, so the {dist_ft:g} ft "
             "is a true ground distance -- but for a deliverable, rerun with your "
             "state plane zone via `--crs`.",
             "",

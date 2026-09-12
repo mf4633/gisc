@@ -240,7 +240,22 @@ def _op_buffer(op, plan, env, prov, ctx):
 
 
 def _op_intersect(op, plan, env, prov, ctx):
+    """Which features of ``a`` meet ``b``, and optionally only the part that does.
+
+    ``geometry: "source"`` (the default) keeps the whole feature: the answer to
+    "which pipe is in my corridor" is the pipe, and how much of it is inside is
+    an attribute. ``geometry: "intersection"`` keeps only the overlap, because
+    the answer to "where does this pipe cross the centreline" is a point that
+    exists in neither input until the intersection makes it.
+    """
     a, b, out = op["a"], op["b"], op["out"]
+    keep = op.get("geometry", "source")
+    if keep not in ("source", "intersection"):
+        raise UsageError(
+            f"intersect({a}, {b}): geometry={keep!r} is not something gisc knows. "
+            "Use 'source' to keep the whole feature, or 'intersection' to keep "
+            "only the part of it that overlaps."
+        )
     left, right = env[a], env[b]
     _require_crs(left, a)
     _require_crs(right, b)
@@ -252,14 +267,14 @@ def _op_intersect(op, plan, env, prov, ctx):
     mask = right.geometry.union_all()
     hits = left[left.geometry.intersects(mask)].copy()
 
-    # Geometry is the source geometry, unclipped: the answer to "which pipe"
-    # is the whole pipe. How much of it is inside is an attribute.
+    clipped = None
     if len(hits):
+        clipped = hits.geometry.intersection(mask)
         # Measured geodesically on WGS 84, so how much of a pipe sits in the
         # corridor does not depend on which analysis CRS was chosen. Doing it
         # in EPSG:3857 costs ~0.2% on an east-west run, because Web Mercator
         # is anisotropic on the ellipsoid.
-        inside = hits.geometry.intersection(mask).to_crs(OUT_CRS)
+        inside = clipped.to_crs(OUT_CRS)
         # Decided per feature, not per layer: a length for linework, an area
         # for polygons, neither for a point. A mixed layer must not hand its
         # lines a zero-acre area.
@@ -276,12 +291,16 @@ def _op_intersect(op, plan, env, prov, ctx):
         if any(v is not None for v in areas):
             hits["overlap_ac"] = areas
 
+    if keep == "intersection" and clipped is not None:
+        hits = hits.set_geometry(clipped)
+
     env[out] = hits
     return {
         "predicate": "intersects",
-        "geometry": "source (unclipped)",
+        "geometry": "source (unclipped)" if keep == "source" else "intersection only",
         "candidates": int(len(left)),
         "hits": int(len(hits)),
+        "geometry_types_out": sorted({t for t in hits.geom_type.dropna().unique()}),
     }
 
 
@@ -475,7 +494,6 @@ def execute(plan: Plan, out_dir: pathlib.Path | str) -> Result:
         "started_at": now(),
         "crs_analysis": plan.crs,
         "crs_out": OUT_CRS,
-        "buffer_ft": plan.buffer_ft,
         "stateless": "gisc read the sources below and wrote only this folder",
         "sources": {},
         "ops": [],
@@ -488,6 +506,9 @@ def execute(plan: Plan, out_dir: pathlib.Path | str) -> Result:
         detail = _DISPATCH[op["op"]](op, plan, env, prov, ctx)
         prov["ops"].append({"i": i, **op, "result": detail})
 
-    prov["buffer"] = ctx.get("buffer")
+    if plan.buffer_ft is not None:
+        prov["buffer_ft"] = plan.buffer_ft
+    if ctx.get("buffer") is not None:
+        prov["buffer"] = ctx["buffer"]
     prov["finished_at"] = now()
     return Result(plan=plan, env=env, provenance=prov)

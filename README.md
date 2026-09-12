@@ -24,7 +24,9 @@ clearing is undone if anything goes wrong — the previous run is set aside, not
 deleted, and put back on any failure — so a run either replaces the last one
 completely or leaves it exactly as it was.
 
-**Task:** `corridor.conflicts` — what is inside N feet of an alignment. **Ops:**
+**Tasks:** `corridor.conflicts` — what is inside N feet of an alignment.
+`alignment.crossings` — where something crosses the centreline, as the point the
+intersection makes, with its station. **Ops:**
 `read, reproject, buffer, intersect, sample, write`, and nothing else.
 **Exit codes:** 0 ok, 2 usage, 3 missing CRS, 4 adapter failed, 5 adapter stubbed.
 
@@ -67,7 +69,7 @@ loudly and names the element.
 **Stubbed:** `postgis` and `fema` (NFHL) — both parse their input and fail with the
 exact SQL or HTTP request they would issue.
 
-**Tested:** 339 tests, 100% line coverage, enforced in CI. Four guards no input can
+**Tested:** 363 tests, 100% line coverage, enforced in CI. Four guards no input can
 reach are marked `pragma: no cover` with the reason, rather than mocked into a
 number. Plus acceptance checks against real tools.
 Two alignments built in **Autodesk Civil 3D 2023** over COM:
