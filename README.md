@@ -3,7 +3,11 @@
 A stateless civil/GIS compiler. Civil intent → IR → adapters → view + provenance.
 
 ```
-pip install -e ".[dev]" && pytest && gisc compile corridor.conflicts \
+pip install gisc
+```
+
+```
+gisc compile corridor.conflicts \
   --alignment fixtures/alignment.xml \
   --utils fixtures/utilities.geojson \
   --flood fixtures/flood.geojson \
@@ -11,6 +15,7 @@ pip install -e ".[dev]" && pytest && gisc compile corridor.conflicts \
 ```
 
 `gisc ir <same args>` prints the plan and stops without executing any op.
+From a clone: `pip install -e ".[dev]" && pytest`.
 
 **Stateless** means gisc has no database. It reads the files and services you already
 own, in place, read-only, and writes exactly one folder: `plan.json` (the IR it
