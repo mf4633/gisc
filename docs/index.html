@@ -1,0 +1,315 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>gisc — read LandXML alignments in Python: spirals, station equations, provenance</title>
+<meta name="description" content="An open-source Python tool that reads Civil 3D LandXML alignments — clothoid spirals, station equations, ground vs grid feet — and answers corridor questions with full provenance. Validated against Autodesk Civil 3D 2023.">
+<link rel="canonical" href="https://mf4633.github.io/gisc/">
+
+<meta property="og:type" content="website">
+<meta property="og:title" content="gisc — a stateless civil/GIS compiler">
+<meta property="og:description" content="Reads LandXML alignments including clothoid spirals and station equations. Validated against Autodesk Civil 3D 2023 to 7×10⁻¹¹ ft on the clothoid.">
+<meta property="og:url" content="https://mf4633.github.io/gisc/">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&display=swap">
+
+<style>
+  :root {
+    --paper:#f2f4f6; --surface:#fff; --sunk:#e8ecf0; --ink:#141a21;
+    --slate:#5c6874; --hair:#c9d2da; --accent:#0b5fa5; --redline:#b4341f;
+    --f-display:"Archivo","Helvetica Neue",Arial,sans-serif;
+    --f-body:"Source Serif 4",Georgia,"Times New Roman",serif;
+    --f-mono:"JetBrains Mono",ui-monospace,Consolas,monospace;
+    --measure:68ch;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper:#10151a; --surface:#161d24; --sunk:#0b1015; --ink:#e6ecf1;
+      --slate:#93a1ae; --hair:#2a353f; --accent:#5aa9e6; --redline:#e8785f;
+    }
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  @media (prefers-reduced-motion: reduce){html{scroll-behavior:auto}}
+  body{
+    margin:0; background:var(--paper); color:var(--ink);
+    font-family:var(--f-body); font-size:17px; line-height:1.65;
+    -webkit-font-smoothing:antialiased;
+  }
+  .sheet{max-width:940px;margin:0 auto;padding-inline:clamp(16px,5vw,56px);padding-block:clamp(32px,6vw,64px) 72px}
+
+  .eyebrow{font-family:var(--f-display);font-size:12px;font-weight:600;letter-spacing:.14em;
+    text-transform:uppercase;color:var(--slate);margin:0 0 14px}
+  h1{font-family:var(--f-display);font-size:clamp(34px,6vw,54px);font-weight:700;
+    letter-spacing:-.022em;line-height:1.05;margin:0 0 18px;text-wrap:balance;max-width:18ch}
+  .standfirst{font-size:clamp(18px,2.3vw,21px);line-height:1.55;max-width:var(--measure);margin:0 0 28px}
+  .standfirst em{font-style:italic;color:var(--accent)}
+
+  h2{font-family:var(--f-display);font-size:clamp(22px,3vw,28px);font-weight:600;
+    letter-spacing:-.012em;line-height:1.2;margin:56px 0 14px;text-wrap:balance;scroll-margin-top:24px}
+  h3{font-family:var(--f-display);font-size:16px;font-weight:600;margin:32px 0 8px;scroll-margin-top:24px}
+  p{max-width:var(--measure);margin:0 0 16px}
+  ul{max-width:var(--measure);padding-left:1.1em}
+  li{margin-bottom:8px}
+  a{color:var(--accent)}
+
+  code{font-family:var(--f-mono);font-size:.87em;background:var(--sunk);padding:1px 5px;border-radius:2px}
+  pre{margin:18px 0;padding:16px;background:var(--surface);border:1px solid var(--hair);
+    border-left:3px solid var(--accent);overflow-x:auto;font-family:var(--f-mono);
+    font-size:12.5px;line-height:1.75;font-variant-numeric:tabular-nums}
+  pre code{background:none;padding:0;font-size:inherit}
+  .dim{color:var(--slate)} .bad{color:var(--redline)} .add{color:var(--accent)}
+
+  .cta{display:flex;flex-wrap:wrap;gap:10px;margin:0 0 40px}
+  .cta a{font-family:var(--f-display);font-size:14px;font-weight:600;text-decoration:none;
+    padding:9px 16px;border:1px solid var(--hair);background:var(--surface);color:var(--ink)}
+  .cta a.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+
+  .table-wrap{overflow-x:auto;margin:18px 0}
+  table{width:100%;border-collapse:collapse;font-size:14.5px;min-width:440px}
+  th{font-family:var(--f-display);font-size:10.5px;font-weight:600;letter-spacing:.11em;
+    text-transform:uppercase;color:var(--slate);text-align:left;padding:0 12px 8px 0;
+    border-bottom:1px solid var(--hair)}
+  td{padding:9px 12px 9px 0;border-bottom:1px solid var(--hair);vertical-align:baseline}
+  th:last-child,td:last-child{text-align:right;padding-right:0}
+  td.num{font-family:var(--f-mono);font-size:13.5px;font-variant-numeric:tabular-nums;white-space:nowrap}
+  tr.hero td{font-weight:600} tr.hero td.num{color:var(--accent);font-weight:700}
+
+  .note{border-left:3px solid var(--redline);background:var(--surface);padding:16px 18px;margin:20px 0;max-width:var(--measure)}
+  .note strong{color:var(--redline)}
+
+  footer{margin-top:64px;padding-top:24px;border-top:1px solid var(--hair);font-size:14px;color:var(--slate)}
+  footer a{text-decoration:none;border-bottom:1px solid var(--hair)}
+</style>
+</head>
+<body>
+<div class="sheet">
+
+<p class="eyebrow">Open source &nbsp;·&nbsp; MIT &nbsp;·&nbsp; Python ≥ 3.11</p>
+<h1>gisc</h1>
+<p class="standfirst">
+  A stateless civil/GIS compiler. It reads the LandXML and GIS files you already
+  own — including the two things most readers get quietly wrong, <em>clothoid
+  spirals</em> and <em>station equations</em> — answers one civil question about
+  them, and writes exactly one folder with the provenance to prove it.
+</p>
+
+<div class="cta">
+  <a class="primary" href="https://pypi.org/project/gisc/">pip install gisc</a>
+  <a href="https://github.com/mf4633/gisc">Source on GitHub</a>
+  <a href="#civil3d">Civil 3D COM notes</a>
+</div>
+
+<pre><code>gisc compile corridor.conflicts \
+  --alignment alignment.xml --utils utilities.geojson \
+  --buffer-ft 15 --crs EPSG:2264 --out ./run</code></pre>
+
+<p>
+  Two tasks today. <code>corridor.conflicts</code> asks what is inside N feet of an
+  alignment; <code>alignment.crossings</code> asks where something crosses the
+  centreline, and returns the crossing point with its station. <code>gisc ir</code>
+  prints the whole compiled plan and executes nothing.
+</p>
+
+<h2 id="stateless">Stateless, and what that buys</h2>
+<p>
+  gisc has no database. It reads your files in place, read-only, and writes one
+  folder: the plan it compiled, the results, a summary, and
+  <code>provenance.json</code> — source path, mtime, sha256, CRS in and out,
+  filter and feature counts for every input.
+</p>
+<p>
+  Every emitted feature carries the source it came from. If gisc cannot say where
+  a geometry came from, it does not emit it. A missing CRS is a non-zero exit,
+  never a guess. And a run either replaces the previous one completely or leaves
+  it exactly as it was — the old run is moved aside, not deleted, and restored on
+  any failure.
+</p>
+
+<h2 id="station-equations">Reading a LandXML station equation in Python</h2>
+<p>
+  This is the one worth knowing about even if you never use gisc. An alignment
+  can be re-stationed, and when it is, the station of a point stops being the
+  distance to it. A <code>&lt;StaEquation&gt;</code> declares that at one point the
+  stationing jumps, so the drawing reads <code>14+00 Back = 20+00 Ahead</code>.
+</p>
+<p>
+  Ignore it and nothing looks wrong. The geometry parses, the CRS resolves, the
+  offsets are right — and every station past the equation is off by the size of
+  the equation:
+</p>
+<pre><code><span class="bad">a reader that ignores StaEquation says   2000.0</span>
+<span class="add">Civil 3D says                            2600.0</span></code></pre>
+<p>
+  The mapping itself is simple once stated. The raw station is
+  <code>staStart</code> plus distance along. At each equation, with
+  <code>staInternal</code> = S and <code>staAhead</code> = A, everything past S is
+  displayed at <code>raw + (A − S)</code>. Two details bite:
+</p>
+<ul>
+  <li>a <strong>gap</strong> (ahead &gt; back) skips stations that no point on the
+    alignment has — subtracting two displayed stations stops giving you a length;</li>
+  <li>an <strong>overlap</strong> (ahead &lt; back) makes one station name two
+    different points, so a station alone is no longer an address and the region
+    has to travel with it.</li>
+</ul>
+<p>
+  Some exporters omit <code>staInternal</code> and give only <code>staBack</code>;
+  the raw station then follows from the equations already applied, which means
+  file order matters. gisc reads both forms and says which it used.
+</p>
+
+<h2 id="spirals">Flattening a LandXML clothoid spiral</h2>
+<p>
+  A <code>&lt;Spiral spiType="clothoid"&gt;</code> is a transition whose curvature ramps
+  linearly, so its <em>heading</em> is exact in closed form and only the sine and
+  cosine of it need integrating:
+</p>
+<pre><code>θ(s) = θ₀ + sign · ( k₁·s + (k₂ − k₁)·s² / 2L )      k = 1/R, 0 for a tangent end</code></pre>
+<p>
+  One expression covers an entry spiral, an exit spiral, and a compound spiral
+  between two finite radii. Two things are easy to get wrong:
+</p>
+<ul>
+  <li><strong>Orientation.</strong> <code>&lt;PI&gt;</code> is the intersection of the
+    tangents at the spiral's two ends, so Start → PI is the entry tangent
+    whichever way round the spiral runs.</li>
+  <li><strong>Chord count.</strong> Curvature is not constant along a spiral, so
+    sizing the chord count from <em>average</em> curvature under-chords it by
+    about 2×. The chord nearest the small-radius end turns roughly twice as far
+    as the mean one, and it is the one that has to meet your tolerance.</li>
+</ul>
+<p>
+  gisc integrates it, then checks the result against the <code>&lt;End&gt;</code> the
+  file declares and refuses a spiral that does not land there — naming a reversed
+  <code>rot</code> as the likely cause when flipping it would close.
+</p>
+
+<h2 id="feet">Ground feet, grid feet, and the buffer</h2>
+<p>
+  A projected CRS measures grid distance; a design clearance is a ground
+  distance. In EPSG:3857 near 35.6°N the factor is 1.230, so an uncorrected 15 ft
+  buffer covers 12.2 ft of real ground. State plane runs the other way, slightly
+  under 1. gisc measures the local scale factor empirically — a geodesic walk on
+  WGS 84 — rather than trusting a projection's analytic factor, which is wrong
+  for Web Mercator on an ellipsoid.
+</p>
+<p>
+  Two things quietly give that correction back, so gisc handles both. A buffer is
+  a polygon <em>inscribed</em> in the true circle, and at the usual 8 segments per
+  quadrant a 15 ft corridor is 14.93 ft at its ends. And the scale factor is a
+  property of a <em>point</em>, so over a long alignment one buffer distance
+  cannot be right everywhere; gisc measures the drift and reports what it costs
+  in feet.
+</p>
+<p>
+  Stationing is measured in the alignment's <em>native design CRS</em>, because a
+  station is a grid distance in the system the drawing was made in.
+</p>
+
+<h2 id="civil3d">Autodesk Civil 3D COM notes</h2>
+<p>
+  Undocumented behaviour found while validating gisc against Civil 3D 2023 over
+  COM. Recorded here because none of it is written down anywhere obvious, and the
+  first one produces a valid-looking result that is completely wrong.
+</p>
+
+<div class="note">
+  <p style="margin:0">
+    <strong>AddFreeSCSGroup1's sixth argument is <code>GreaterThan180</code>.</strong>
+    The signature is <code>(PreviousElementId, NextElementId, Spiral1Length,
+    Radius, Spiral2Length, GreaterThan180, spiralDefinition)</code>. Passing
+    <code>1</code> succeeds, returns a valid object, and fits the <strong>315°
+    reflex curve</strong> instead of the 45° one — 2900 ft where 985 ft was
+    expected, with nothing complaining. Check the fitted length against a hand
+    computation before trusting the result. <code>spiralDefinition</code> must be
+    <code>1</code> for the clothoid; <code>0</code> raises.
+  </p>
+</div>
+
+<h3>Other things that cost time</h3>
+<ul>
+  <li><strong>COM answers before the object model loads.</strong> With no drawing
+    open, <code>acad.Documents</code> returns an object with no methods at all —
+    <code>Documents.Add</code>, <code>.Count</code> and <code>.Item</code> all
+    raise <code>AttributeError</code>. It looks like a permissions failure and
+    isn't. Open a document first.</li>
+  <li><strong>Get signatures from the type library, not from guesswork.</strong>
+    <code>ti.GetNames(fd.memid)</code> returns the method name <em>and its
+    parameter names</em>. That is how <code>GreaterThan180</code> was found.</li>
+  <li><strong>Station equations:</strong> <code>StationEquations.Add(RawStationBack,
+    StationBack, StationAhead, StationEquationType)</code> — four arguments, type
+    <code>1</code> for increasing.</li>
+  <li><strong>Entity handles go stale.</strong> Re-fetch <code>al.Entities</code>
+    after adding geometry or <code>Count</code> reads zero.</li>
+  <li><strong>An SCS group is one top-level entity</strong> with three
+    sub-entities: <code>SpiralIn</code>, <code>Arc</code>, <code>SpiralOut</code>.
+    They come back in id order, not station order — sort them, or your CoordGeom
+    is not a centreline.</li>
+  <li><strong>Civil 3D signs offsets negative-left, positive-right.</strong></li>
+  <li><strong>The arc centre</strong> is the entry spiral's
+    <code>RadialEasting</code>/<code>RadialNorthing</code>.</li>
+</ul>
+
+<h2 id="validation">Checked against Civil 3D, not against itself</h2>
+<p>
+  Two alignments were built inside Civil 3D over COM and Civil 3D was asked for
+  its own answers. The LandXML gisc reads was written from the geometry read back
+  out of Civil 3D, so gisc parses Civil 3D's coordinates rather than the design
+  that was fed in.
+</p>
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Quantity</th><th>Civil 3D vs gisc</th></tr></thead>
+  <tbody>
+    <tr><td>tangent–arc–tangent, length</td><td class="num">−0.0025 ft / 1035 ft</td></tr>
+    <tr><td>spiral–curve–spiral, length</td><td class="num">−0.0020 ft / 985 ft</td></tr>
+    <tr><td>centre-line XY, 40 stations</td><td class="num">worst 0.0091 ft</td></tr>
+    <tr class="hero"><td>clothoid <code>TotalX</code> / <code>TotalY</code></td><td class="num">~7 × 10⁻¹¹ ft</td></tr>
+    <tr><td>offset, 8 probes</td><td class="num">worst 0.0073 ft</td></tr>
+    <tr class="hero"><td>station across a station equation</td><td class="num">worst 0.0300 ft</td></tr>
+  </tbody>
+</table>
+</div>
+<p>
+  The clothoid row is the one that says something. Civil 3D carries the spiral
+  analytically and publishes its own <code>TotalX</code>/<code>TotalY</code>; gisc
+  integrates it from nothing but the length and the two radii. Agreement to a
+  ten-billionth of a foot means whatever error remains is chording, not the
+  mathematics — and chording lands at 0.0091 ft against an advertised 0.01.
+</p>
+<p>
+  363 tests, 100% line coverage enforced in CI, on Linux and Windows across
+  Python 3.11 and 3.12. The validation artifacts are committed, so the Civil 3D
+  checks run anywhere without Civil 3D.
+</p>
+
+<h2 id="limits">What it does not do</h2>
+<ul>
+  <li>The <code>postgis</code> and <code>fema</code> (NFHL) adapters are stubs.
+    They parse their input and fail with the exact SQL or HTTP request they would
+    have issued, rather than inventing an answer.</li>
+  <li>Non-clothoid transitions — bloss, sinusoidal, the cubic families — are
+    refused by name rather than approximated.</li>
+  <li>A genuine <code>LANDXMLOUT</code> file containing a spiral or a station
+    equation is not exercised: Civil 3D's LandXML export is a modal dialog with
+    no COM entry point.</li>
+  <li>Two tasks. The IR claims to be "one common plan that every task compiles
+    down to" — read that as a claim with two data points behind it, not a law.</li>
+</ul>
+
+<footer>
+  <p style="margin:0 0 8px">
+    <a href="https://github.com/mf4633/gisc">github.com/mf4633/gisc</a> &nbsp;·&nbsp;
+    <a href="https://pypi.org/project/gisc/">pypi.org/project/gisc</a> &nbsp;·&nbsp;
+    <a href="https://github.com/mf4633/gisc/releases">Changelog</a>
+  </p>
+  <p style="margin:0">MIT licensed. Built by Michael Flynn.</p>
+</footer>
+
+</div>
+</body>
+</html>
