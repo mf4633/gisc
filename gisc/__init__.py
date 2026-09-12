@@ -6,7 +6,7 @@ gisc stores nothing. It reads the owner's files and services and writes only
 the output folder it was asked for.
 """
 
-__version__ = "0.3.0"
+__version__ = "0.3.1"
 
 from gisc.errors import AdapterError, GiscError, MissingCRSError, StubError
 
