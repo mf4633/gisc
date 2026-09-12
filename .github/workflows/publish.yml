@@ -1,0 +1,83 @@
+name: publish
+
+# Publishing happens when a GitHub release is published, so the tag, the
+# release notes and the artifact on PyPI always describe the same commit.
+# workflow_dispatch is here to rehearse the build without publishing anything:
+# the publish job only runs for a real release.
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      # The tag is what a user will `pip install`, so it has to be the version
+      # the package actually declares. A mismatch here is silent otherwise, and
+      # only shows up as a wrong-looking version on PyPI that cannot be undone.
+      - name: The tag and the package version must agree
+        if: github.event_name == 'release'
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          pkg=$(python -c "import re,pathlib; print(re.search(r'^version = \"(.+?)\"', pathlib.Path('pyproject.toml').read_text(), re.M).group(1))")
+          echo "tag=$tag  package=$pkg"
+          test "$tag" = "$pkg" || { echo "::error::tag $tag does not match package version $pkg"; exit 1; }
+
+      - name: Build
+        run: |
+          python -m pip install --upgrade pip build twine
+          python -m build
+
+      - name: The artifacts must be fit to upload
+        run: python -m twine check --strict dist/*
+
+      # Install the built wheel somewhere clean and run the console script, so
+      # a package that builds but does not work cannot reach PyPI.
+      - name: A built wheel must actually install and run
+        run: |
+          python -m venv /tmp/check
+          /tmp/check/bin/python -m pip install --quiet dist/*.whl
+          /tmp/check/bin/gisc --version
+          /tmp/check/bin/gisc ir corridor.conflicts \
+            --alignment fixtures/alignment.xml \
+            --utils fixtures/utilities.geojson \
+            --crs EPSG:2264 --out ./out/smoke > /dev/null
+          /tmp/check/bin/gisc ir alignment.crossings \
+            --alignment fixtures/alignment.xml \
+            --utils fixtures/utilities.geojson \
+            --crs EPSG:2264 --out ./out/smoke > /dev/null
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: dist
+          path: dist/
+
+  publish:
+    needs: build
+    if: github.event_name == 'release'
+    runs-on: ubuntu-latest
+    # Trusted Publishing: PyPI verifies this workflow's OIDC identity, so there
+    # is no API token to store, rotate or leak. Configured on PyPI against
+    # mf4633/gisc + publish.yml + the pypi environment.
+    environment:
+      name: pypi
+      url: https://pypi.org/p/gisc
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: dist
+          path: dist/
+
+      - uses: pypa/gh-action-pypi-publish@v1.14.2
