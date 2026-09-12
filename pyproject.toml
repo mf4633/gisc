@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "gisc"
-version = "0.1.0"
+version = "0.2.0"
 description = "A stateless civil/GIS compiler: civil intent -> IR -> adapters -> view + provenance."
 readme = "README.md"
 requires-python = ">=3.11"
