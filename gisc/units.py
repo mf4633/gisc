@@ -33,6 +33,12 @@ _GEOD = Geod(ellps="WGS84")
 _PROBE_M = 100.0  # geodesic probe length; long enough to be numerically clean
 _AZIMUTHS = (0.0, 45.0, 90.0, 135.0)  # 180 deg apart is the same line
 
+# How far a buffer's polygonised arc may fall inside the true circle, in ground
+# feet. Correcting a 1.23 scale factor and then cutting the corners off the ends
+# with shapely's default 8 segments per quadrant -- 0.072 ft on a 15 ft buffer --
+# would give back most of what the correction just bought.
+BUFFER_CHORD_TOLERANCE_FT = 0.001
+
 
 def _projected(crs: Any) -> CRS:
     crs = CRS.from_user_input(crs)
@@ -57,7 +63,11 @@ def scale_factor(crs: Any, at_xy: tuple[float, float]) -> dict[str, Any]:
     to_xy = Transformer.from_crs("EPSG:4326", crs, always_xy=True)
 
     lon, lat = to_ll.transform(*at_xy)
-    if not (math.isfinite(lon) and math.isfinite(lat)):
+    # pyproj clamps an out-of-domain point to latitude -90 and returns a finite
+    # number rather than inf, so in practice the scale factor check below is what
+    # catches data that is not where its CRS says it is. Kept against a pyproj
+    # that stops clamping, which would make this the first thing to notice.
+    if not (math.isfinite(lon) and math.isfinite(lat)):  # pragma: no cover
         raise UsageError(
             f"point {at_xy} does not transform out of {crs.to_string()}; the data is "
             "probably not where the CRS says it is."
@@ -91,17 +101,70 @@ def scale_factor(crs: Any, at_xy: tuple[float, float]) -> dict[str, Any]:
     }
 
 
-def buffer_distance(crs: Any, dist_ft: float, at_xy: tuple[float, float]) -> dict[str, Any]:
-    """Distance in CRS units that spans ``dist_ft`` of true ground at ``at_xy``."""
+def quad_segs(dist_crs_units: float, tolerance_crs_units: float) -> int:
+    """Segments per quadrant so a buffer's arc stays within ``tolerance``.
+
+    A polygonised buffer is inscribed: every arc falls *inside* the true
+    circle, so a 15 ft corridor drawn at shapely's default 8 segments per
+    quadrant is a 14.93 ft corridor at the ends, and a utility sitting in that
+    0.07 ft is reported as clear when it is not.
+    """
+    if dist_crs_units <= 0 or tolerance_crs_units <= 0:
+        return 8
+    ratio = min(1.0, tolerance_crs_units / dist_crs_units)
+    half = math.acos(max(-1.0, min(1.0, 1.0 - ratio)))
+    if half <= 0:
+        return 512
+    return int(max(8, min(512, math.ceil(math.pi / (4.0 * half)))))
+
+
+def buffer_distance(crs: Any, dist_ft: float, at_xy: tuple[float, float],
+                    extent: list[tuple[float, float]] | None = None) -> dict[str, Any]:
+    """Distance in CRS units that spans ``dist_ft`` of true ground at ``at_xy``.
+
+    ``extent`` is other points on the same feature. The scale factor is a
+    *point* property; over a long alignment it drifts, and a single buffer
+    distance cannot be exactly right everywhere. gisc measures the drift and
+    reports what it costs in feet rather than letting it pass unmentioned.
+    """
     sf = scale_factor(crs, at_xy)
     ground_m = dist_ft * FT_TO_M
-    return {
+    k = sf["point_scale_factor"]
+    distance = ground_m * k / sf["crs_unit_to_m"]
+    tolerance = BUFFER_CHORD_TOLERANCE_FT * FT_TO_M / sf["crs_unit_to_m"]
+    segs = quad_segs(distance, tolerance)
+
+    out: dict[str, Any] = {
         "dist_ft": dist_ft,
         "basis": "true ground distance",
         "ground_m": ground_m,
         **sf,
-        "distance_in_crs_units": ground_m * sf["point_scale_factor"] / sf["crs_unit_to_m"],
+        "distance_in_crs_units": distance,
+        "quad_segs": segs,
+        "chord_error_ft": round(
+            dist_ft * (1.0 - math.cos(math.pi / (4.0 * segs))), 6
+        ),
+        "notes": [],
     }
+
+    if extent:
+        factors = [scale_factor(crs, p)["point_scale_factor"] for p in extent]
+        lo, hi = min(factors + [k]), max(factors + [k])
+        # The buffer is one distance. Where the true factor is hi and we used
+        # k, the ground width delivered is dist_ft * k / hi.
+        worst = max(abs(dist_ft * k / lo - dist_ft), abs(dist_ft * k / hi - dist_ft))
+        out["scale_factor_over_extent"] = [lo, hi]
+        out["scale_factor_samples"] = len(factors) + 1
+        out["extent_error_ft"] = round(worst, 6)
+        if worst > max(0.01, 0.001 * dist_ft):
+            out["notes"].append(
+                f"the grid/ground scale factor runs {lo:.6f} to {hi:.6f} over this "
+                f"alignment, so one buffer distance cannot be exact along all of it: "
+                f"the {dist_ft:g} ft corridor is off by up to {worst:.3f} ft at the "
+                "extremes. Use a state plane zone that actually covers this site, or "
+                "split the alignment."
+            )
+    return out
 
 
 def to_ft(dist_crs_units: float, crs: Any, k: float) -> float:

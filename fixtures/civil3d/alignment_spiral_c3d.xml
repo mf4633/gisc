@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<LandXML xmlns="http://www.landxml.org/schema/LandXML-1.2" version="1.2">
+  <Units>
+    <Imperial linearUnit="USSurveyFoot" areaUnit="squareFoot"
+              volumeUnit="cubicFeet" temperatureUnit="fahrenheit"
+              pressureUnit="inHG" angularUnit="decimal degrees"
+              directionUnit="decimal degrees"/>
+  </Units>
+  <CoordinateSystem epsgCode="2264" horizontalDatum="NAD83"
+                    horizontalCoordinateSystemName="NAD83 / North Carolina (ftUS)"
+                    desc="NAD83 North Carolina State Planes, US Foot (CSCode NC83F)"/>
+  <Alignments name="Roadway">
+    <Alignment name="GISC-SPIRAL" length="984.820205849" staStart="1000.000000000">
+      <CoordGeom>
+        <Line>
+          <Start>675000.000000000 905000.000000000</Start>
+          <End>675000.000000000 905299.600378415</End>
+        </Line>
+        <Spiral length="150.000000000" radiusStart="INF" radiusEnd="300.000000000" rot="ccw" spiType="clothoid" theta="14.323944878" totalX="149.065208764" totalY="12.444307281">
+          <Start>675000.000000000 905299.600378415</Start>
+          <PI>675000.000000000 905399.929730485</PI>
+          <End>675012.444307281 905448.665587179</End>
+        </Spiral>
+        <Curve rot="ccw" radius="300.000000000">
+          <Start>675012.444307281 905448.665587179</Start>
+          <Center>675303.118016352 905374.444331096</Center>
+          <End>675045.098365479 905527.499457349</End>
+        </Curve>
+        <Spiral length="150.000000000" radiusStart="300.000000000" radiusEnd="INF" rot="ccw" spiType="clothoid" theta="14.323944878" totalX="149.065208764" totalY="12.444307281">
+          <Start>675045.098365479 905527.499457349</Start>
+          <PI>675070.760366169 905570.760366169</PI>
+          <End>675141.703931370 905641.703931370</End>
+        </Spiral>
+        <Line>
+          <Start>675141.703931370 905641.703931370</Start>
+          <End>675353.553390593 905853.553390593</End>
+        </Line>
+      </CoordGeom>
+      <StaEquation staInternal="1400.000000000" staBack="1400.000000000" staAhead="2000.000000000" desc="from Civil 3D 2023"/>
+    </Alignment>
+  </Alignments>
+</LandXML>

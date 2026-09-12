@@ -20,9 +20,9 @@ jobs:
     name: ${{ matrix.os }} / py${{ matrix.python }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python }}
           cache: pip
@@ -33,7 +33,9 @@ jobs:
           pip install -e ".[dev]" pytest-cov
 
       - name: Test
-        run: pytest -q --cov=gisc --cov-report=term-missing
+        # 100% means every reachable line. The guards that no input can reach
+        # carry "pragma: no cover" and say why, so this stays enforceable.
+        run: pytest -q --cov=gisc --cov-report=term-missing --cov-fail-under=100
 
       - name: The one command in the README must work
         shell: bash

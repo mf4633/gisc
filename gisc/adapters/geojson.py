@@ -71,7 +71,10 @@ def read(ref: str, layer: str | None = None, crs_override: str | None = None):
 
     if crs_override:
         gdf = gdf.set_crs(crs_override, allow_override=True)
-    if gdf.crs is None:
+    # describe() has already settled the CRS -- declared, user override, or
+    # RFC 7946's WGS 84 default -- so a frame cannot reach here without one.
+    # Kept because on the day that stops being true, the alternative is a guess.
+    if gdf.crs is None:  # pragma: no cover
         raise MissingCRSError(f"{path}: no CRS. Pass an explicit CRS or fix the file.")
 
     prov = {

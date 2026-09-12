@@ -14,7 +14,9 @@ import geopandas as gpd
 import pandas as pd
 import pytest
 from shapely.geometry import LineString, Point
+from typer.testing import CliRunner
 
+from gisc.cli import app
 from gisc.errors import MissingCRSError, UsageError
 from gisc.exec import (
     _side,
@@ -26,6 +28,10 @@ from gisc.exec import (
 from gisc.ir import OPS, Plan, Source, validate
 
 FIXTURES = pathlib.Path(__file__).resolve().parent.parent / "fixtures"
+ALIGN_XML = str(FIXTURES / "alignment.xml")
+UTILS = str(FIXTURES / "utilities.geojson")
+
+runner = CliRunner()
 
 
 def line(coords, crs="EPSG:2264", **cols):
@@ -255,13 +261,13 @@ def test_side_is_left_right_or_centerline():
 
 def test_claim_creates_a_missing_folder(tmp_path):
     target = tmp_path / "deep" / "run"
-    assert claim_out_dir(target) == []
+    assert claim_out_dir(target).cleared == []
     assert target.is_dir()
 
 
 def test_claim_accepts_an_existing_empty_folder(tmp_path):
     (tmp_path / "run").mkdir()
-    assert claim_out_dir(tmp_path / "run") == []
+    assert claim_out_dir(tmp_path / "run").cleared == []
 
 
 def test_claim_refuses_a_folder_it_did_not_write(tmp_path):
@@ -278,7 +284,9 @@ def test_claim_survives_a_corrupt_provenance_file(tmp_path):
     (run / "provenance.json").write_text("{ truncated")
     (run / "plan.json").write_text("{}")
     (run / "summary.md").write_text("#")
-    assert sorted(claim_out_dir(run)) == ["plan.json", "provenance.json", "summary.md"]
+    assert sorted(claim_out_dir(run).cleared) == [
+        "plan.json", "provenance.json", "summary.md",
+    ]
     assert not any(run.iterdir())
 
 
@@ -301,3 +309,196 @@ def test_claim_lists_only_the_first_few_strays(tmp_path):
         (run / f"stray{i}.txt").write_text("x")
     with pytest.raises(UsageError, match=r"\.\.\."):
         claim_out_dir(run)
+
+
+# -- a run replaces the last one completely, or leaves it alone ------------
+#
+# Moving the claim after compile stopped a mistyped path from costing you the
+# previous run. It did not stop a *geometry* failure doing it: those surface at
+# execute time, after the folder has been cleared and the new plan.json written.
+# The folder was then left holding a plan.json with no provenance.json -- which
+# claim_out_dir itself refuses, so the next run could not start either.
+
+DISCONTINUOUS = """<?xml version="1.0" encoding="UTF-8"?>
+<LandXML xmlns="http://www.landxml.org/schema/LandXML-1.2" version="1.2">
+  <CoordinateSystem epsgCode="2264"/>
+  <Alignments name="R">
+    <Alignment name="CL-BROKEN" staStart="1000.0000">
+      <CoordGeom>
+        <Line>
+          <Start>675000.0000 905000.0000</Start>
+          <End>675000.0000 905400.0000</End>
+        </Line>
+        <Line>
+          <Start>675000.0000 905900.0000</Start>
+          <End>675000.0000 906200.0000</End>
+        </Line>
+      </CoordGeom>
+    </Alignment>
+  </Alignments>
+</LandXML>
+"""
+
+
+def _fails_at_execute(tmp_path):
+    """An alignment that passes the header probe and fails when read.
+
+    The gap is only visible once CoordGeom is parsed, which compile never does.
+    """
+    path = tmp_path / "broken.xml"
+    path.write_text(DISCONTINUOUS)
+    return str(path)
+
+
+def _good_run(out, alignment, utils):
+    result = runner.invoke(
+        app, ["compile", "corridor.conflicts", "-a", alignment, "-u", utils,
+              "--crs", "EPSG:2264", "-o", str(out)]
+    )
+    assert result.exit_code == 0, result.output
+    return {p.name: p.read_bytes() for p in out.iterdir()}
+
+
+def test_a_geometry_failure_leaves_the_previous_run_untouched(tmp_path):
+    out = tmp_path / "run"
+    before = _good_run(out, ALIGN_XML, UTILS)
+    assert set(before) == {
+        "conflicts.geojson", "plan.json", "provenance.json", "summary.md"
+    }
+
+    failed = runner.invoke(
+        app, ["compile", "corridor.conflicts", "-a", _fails_at_execute(tmp_path),
+                  "-u", UTILS, "--crs", "EPSG:2264", "-o", str(out)]
+    )
+    assert failed.exit_code == 4
+
+    after = {p.name: p.read_bytes() for p in out.iterdir()}
+    assert after == before, "the previous run must survive byte for byte"
+
+
+def test_a_failed_run_leaves_no_rollback_folder_behind(tmp_path):
+    out = tmp_path / "run"
+    _good_run(out, ALIGN_XML, UTILS)
+    runner.invoke(
+        app, ["compile", "corridor.conflicts", "-a", _fails_at_execute(tmp_path),
+              "-u", UTILS, "--crs", "EPSG:2264", "-o", str(out)]
+    )
+    assert [p.name for p in tmp_path.iterdir() if p.name.startswith(".gisc")] == []
+
+
+def test_a_successful_run_leaves_no_rollback_folder_behind(tmp_path):
+    out = tmp_path / "run"
+    _good_run(out, ALIGN_XML, UTILS)
+    _good_run(out, ALIGN_XML, UTILS)  # second run, so one is set aside
+    assert [p.name for p in tmp_path.iterdir() if p.name.startswith(".gisc")] == []
+
+
+def test_the_folder_is_usable_again_after_a_failure(tmp_path):
+    """The orphan plan.json used to poison it: claim_out_dir refused it next time."""
+    out = tmp_path / "run"
+    _good_run(out, ALIGN_XML, UTILS)
+    runner.invoke(
+        app, ["compile", "corridor.conflicts", "-a", _fails_at_execute(tmp_path),
+              "-u", UTILS, "--crs", "EPSG:2264", "-o", str(out)]
+    )
+    _good_run(out, ALIGN_XML, UTILS)  # must not raise
+
+
+def test_a_failed_first_run_removes_the_folder_it_created(tmp_path):
+    """Nothing was there before, so nothing should be there after."""
+    out = tmp_path / "never-happened"
+    failed = runner.invoke(
+        app, ["compile", "corridor.conflicts", "-a", _fails_at_execute(tmp_path),
+              "-u", UTILS, "--crs", "EPSG:2264", "-o", str(out)]
+    )
+    assert failed.exit_code == 4
+    assert not out.exists()
+
+
+def test_settling_a_claim_twice_does_nothing_the_second_time(tmp_path):
+    """rollback() runs from two handlers; it must not undo a commit."""
+    run = tmp_path / "run"
+    run.mkdir()
+    (run / "provenance.json").write_text(json.dumps({"outputs": {}}))
+    (run / "plan.json").write_text("{}")
+
+    claim = claim_out_dir(run)
+    assert sorted(claim.cleared) == ["plan.json", "provenance.json"]
+    claim.commit()
+    claim.rollback()          # late, and must be a no-op
+    assert not any(run.iterdir())
+    assert [p.name for p in tmp_path.iterdir() if p.name.startswith(".gisc")] == []
+
+
+def test_rollback_removes_a_partly_written_new_run(tmp_path):
+    """Whatever the failed run managed to write goes, before the old one returns."""
+    run = tmp_path / "run"
+    run.mkdir()
+    (run / "provenance.json").write_text(json.dumps({"outputs": {}}))
+    (run / "summary.md").write_text("the run that was there first")
+
+    claim = claim_out_dir(run)
+    (run / "plan.json").write_text("half a new run")
+    (run / "summary.md").write_text("overwritten")
+    claim.rollback()
+
+    assert sorted(p.name for p in run.iterdir()) == ["provenance.json", "summary.md"]
+    assert (run / "summary.md").read_text() == "the run that was there first"
+
+
+def test_committing_twice_does_nothing_the_second_time(tmp_path):
+    run = tmp_path / "run"
+    run.mkdir()
+    (run / "provenance.json").write_text(json.dumps({"outputs": {}}))
+    claim = claim_out_dir(run)
+    claim.commit()
+    claim.commit()  # the success path can be reached from more than one place
+    assert [p.name for p in tmp_path.iterdir() if p.name.startswith(".gisc")] == []
+
+
+def test_a_parent_it_cannot_write_to_is_refused_before_anything_moves(monkeypatch):
+    """gisc needs somewhere to keep the previous run. If it cannot have it, it
+    says so rather than falling back to deleting."""
+    import pathlib as _pathlib
+
+    real_mkdir = _pathlib.Path.mkdir
+
+    def no_rollback_dir(self, *args, **kwargs):
+        if self.name.startswith(".gisc-rollback-"):
+            raise OSError("read-only file system")
+        return real_mkdir(self, *args, **kwargs)
+
+    monkeypatch.setattr(_pathlib.Path, "mkdir", no_rollback_dir)
+
+    run = _pathlib.Path(pytest.importorskip("tempfile").mkdtemp()) / "run"
+    run.mkdir()
+    (run / "provenance.json").write_text(json.dumps({"outputs": {}}))
+    (run / "summary.md").write_text("the run that was there first")
+
+    with pytest.raises(UsageError, match="cannot set aside the previous run"):
+        claim_out_dir(run)
+    # Refused before a single file moved.
+    assert (run / "summary.md").read_text() == "the run that was there first"
+
+
+def test_a_crash_that_is_not_a_gisc_error_still_puts_the_folder_back(tmp_path, monkeypatch):
+    """The failures worth protecting against are the ones nobody predicted, so
+    the rollback cannot be conditional on gisc having named the error."""
+    import gisc.cli as cli
+
+    out = tmp_path / "run"
+    before = _good_run(out, ALIGN_XML, UTILS)
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("something nobody wrote an error class for")
+
+    monkeypatch.setattr(cli, "execute", boom)
+    result = runner.invoke(
+        app, ["compile", "corridor.conflicts", "-a", ALIGN_XML, "-u", UTILS,
+              "--crs", "EPSG:2264", "-o", str(out)]
+    )
+    assert isinstance(result.exception, RuntimeError)
+
+    after = {p.name: p.read_bytes() for p in out.iterdir()}
+    assert after == before
+    assert [p.name for p in tmp_path.iterdir() if p.name.startswith(".gisc")] == []

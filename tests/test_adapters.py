@@ -609,3 +609,134 @@ def test_a_landxml_with_neither_alignment_nor_network(tmp_path):
            '<Surfaces><Surface name="EG"/></Surfaces></LandXML>')
     with pytest.raises(AdapterError, match="surfaces, parcels and point groups"):
         landxml.describe(write(tmp_path / "surface.xml", doc))
+
+
+# -- picking a subject out of a file that holds several ---------------------
+#
+# These are refusal paths. An error message that has never been executed is a
+# crash waiting for the one person unlucky enough to hit it.
+
+
+def _landxml_with(body: str, tmp_path, name="multi.xml") -> str:
+    path = tmp_path / name
+    path.write_text(
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        '<LandXML xmlns="http://www.landxml.org/schema/LandXML-1.2" version="1.2">\n'
+        '  <CoordinateSystem epsgCode="2264"/>\n'
+        f"{body}\n"
+        "</LandXML>\n"
+    )
+    return str(path)
+
+
+_NETWORK = """  <PipeNetworks>
+    <PipeNetwork name="{name}" pipeNetType="storm">
+      <Structs>
+        <Struct name="S1" elevRim="100.0">
+          <Center>675000.0000 905000.0000</Center>
+        </Struct>
+        <Struct name="S2" elevRim="99.0">
+          <Center>675050.0000 905000.0000</Center>
+        </Struct>
+      </Structs>
+      <Pipes>
+        <Pipe name="P1" refStart="S1" refEnd="S2" length="50.0">
+          <CircPipe diameter="18.0" material="RCP"/>
+        </Pipe>
+      </Pipes>
+    </PipeNetwork>
+  </PipeNetworks>"""
+
+_ALIGNMENT = """  <Alignments name="R">
+    <Alignment name="CL-A" length="400.0000" staStart="1000.0000">
+      <CoordGeom>
+        <Line>
+          <Start>675000.0000 905000.0000</Start>
+          <End>675000.0000 905400.0000</End>
+        </Line>
+      </CoordGeom>
+    </Alignment>
+  </Alignments>"""
+
+
+def test_two_pipe_networks_and_no_alignment_asks_which_one(tmp_path):
+    body = _NETWORK.format(name="STORM-A") + "\n" + _NETWORK.format(name="STORM-B")
+    with pytest.raises(AdapterError, match="2 pipe networks"):
+        landxml.read(_landxml_with(body, tmp_path))
+
+
+def test_a_file_holding_both_kinds_asks_which_one(tmp_path):
+    body = _ALIGNMENT + "\n" + _NETWORK.format(name="STORM-A")
+    with pytest.raises(AdapterError, match="both alignments and pipe networks"):
+        landxml.read(_landxml_with(body, tmp_path))
+
+
+def test_naming_the_network_in_a_file_holding_both_works(tmp_path):
+    body = _ALIGNMENT + "\n" + _NETWORK.format(name="STORM-A")
+    gdf, prov = landxml.read(_landxml_with(body, tmp_path), layer="STORM-A")
+    assert prov["subject"] == "pipenetwork"
+    assert prov["pipes"] == 1
+
+
+def test_a_structure_with_no_centre_is_not_a_structure(tmp_path):
+    body = """  <PipeNetworks>
+    <PipeNetwork name="STORM" pipeNetType="storm">
+      <Structs>
+        <Struct name="S1"><Center>675000.0000 905000.0000</Center></Struct>
+        <Struct name="S2"><Center>675050.0000 905000.0000</Center></Struct>
+        <Struct name="S3" elevRim="98.0"/>
+      </Structs>
+      <Pipes>
+        <Pipe name="P1" refStart="S1" refEnd="S2"/>
+        <Pipe name="P2" refStart="S2" refEnd="S3"/>
+      </Pipes>
+    </PipeNetwork>
+  </PipeNetworks>"""
+    _gdf, prov = landxml.read(_landxml_with(body, tmp_path))
+    assert prov["structures"] == 2
+    assert [s["pipe"] for s in prov["skipped"]] == ["P2"]
+
+
+def test_a_pipe_between_two_structures_at_the_same_point_is_left_out(tmp_path):
+    body = """  <PipeNetworks>
+    <PipeNetwork name="STORM" pipeNetType="storm">
+      <Structs>
+        <Struct name="S1"><Center>675000.0000 905000.0000</Center></Struct>
+        <Struct name="S2"><Center>675000.0000 905000.0000</Center></Struct>
+      </Structs>
+      <Pipes><Pipe name="P1" refStart="S1" refEnd="S2"/></Pipes>
+    </PipeNetwork>
+  </PipeNetworks>"""
+    _gdf, prov = landxml.read(_landxml_with(body, tmp_path))
+    assert prov["skipped"][0]["reason"] == "both structures at the same point"
+
+
+def test_a_network_whose_structures_carry_no_geometry_is_refused(tmp_path):
+    body = """  <PipeNetworks>
+    <PipeNetwork name="STORM" pipeNetType="storm">
+      <Structs><Struct name="S1" elevRim="100.0"/></Structs>
+      <Pipes><Pipe name="P1" refStart="S1" refEnd="S2"/></Pipes>
+    </PipeNetwork>
+  </PipeNetworks>"""
+    with pytest.raises(AdapterError, match="yielded no geometry"):
+        landxml.read(_landxml_with(body, tmp_path))
+
+
+def test_a_declared_pipe_length_that_disagrees_with_the_geometry_is_reported(tmp_path):
+    """Civil 3D measures along the pipe; gisc measures centre to centre in 2D."""
+    body = """  <PipeNetworks>
+    <PipeNetwork name="STORM" pipeNetType="storm">
+      <Structs>
+        <Struct name="S1"><Center>675000.0000 905000.0000</Center></Struct>
+        <Struct name="S2"><Center>675050.0000 905000.0000</Center></Struct>
+      </Structs>
+      <Pipes><Pipe name="P1" refStart="S1" refEnd="S2" length="52.5000"/></Pipes>
+    </PipeNetwork>
+  </PipeNetworks>"""
+    _gdf, prov = landxml.read(_landxml_with(body, tmp_path))
+    assert any("differ from the declared" in n for n in prov["notes"])
+
+
+@pytest.mark.parametrize("value", ["", None, "not-a-number"])
+def test_an_unparseable_numeric_attribute_reads_as_absent(value):
+    assert landxml._maybe_float(value) is None

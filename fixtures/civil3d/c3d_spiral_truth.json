@@ -1,0 +1,568 @@
+{
+  "product": "Autodesk Civil 3D 2023",
+  "com_progid": "AeccXUiLand.AeccApplication.13.5",
+  "acad_version": "24.2s (LMS Tech)",
+  "coordinate_system": {
+    "cs_code": "NC83F",
+    "description": "NAD83 North Carolina State Planes, US Foot",
+    "epsg": 2264
+  },
+  "alignment": {
+    "name": "GISC-SPIRAL",
+    "length": 984.8202058486328,
+    "starting_station": 1000.0,
+    "ending_station": 1984.820205848633,
+    "entities": [
+      {
+        "Constraint": 289,
+        "Direction": 1.5707963267948966,
+        "EndEasting": 905299.6003784147,
+        "EndNorthing": 675000.0,
+        "EndingStation": 1299.6003784147324,
+        "EntityAfter": 3,
+        "EntityBefore": 0,
+        "HighestDesignSpeed": 0.0,
+        "Id": 1,
+        "Length": 299.6003784147324,
+        "LineConstraint": 513,
+        "MidEasting": 905149.8001892073,
+        "MidNorthing": 675000.0,
+        "PIEasting": 905500.0,
+        "PINorthing": 675000.0,
+        "PassThroughPoint1": [
+          905000.0,
+          675000.0,
+          0.0
+        ],
+        "PassThroughPoint2": [
+          905500.0,
+          675000.0,
+          0.0
+        ],
+        "StartEasting": 905000.0,
+        "StartNorthing": 675000.0,
+        "StartingStation": 1000.0,
+        "SubEntityCount": 0,
+        "Type": 1
+      },
+      {
+        "Constraint": 289,
+        "Direction": 0.7853981633974483,
+        "EndEasting": 905853.5533905933,
+        "EndNorthing": 675353.5533905933,
+        "EndingStation": 1984.820205848633,
+        "EntityAfter": 0,
+        "EntityBefore": 3,
+        "HighestDesignSpeed": 0.0,
+        "Id": 2,
+        "Length": 299.600378414714,
+        "LineConstraint": 513,
+        "MidEasting": 905747.6286609818,
+        "MidNorthing": 675247.6286609818,
+        "PIEasting": 905853.5533905933,
+        "PINorthing": 675353.5533905933,
+        "PassThroughPoint1": [
+          905500.0,
+          675000.0,
+          0.0
+        ],
+        "PassThroughPoint2": [
+          905853.5533905933,
+          675353.5533905933,
+          0.0
+        ],
+        "StartEasting": 905641.7039313702,
+        "StartNorthing": 675141.7039313702,
+        "StartingStation": 1685.219827433919,
+        "SubEntityCount": 0,
+        "Type": 1
+      },
+      {
+        "Constraint": 291,
+        "EndEasting": 905641.7039313702,
+        "EndNorthing": 675141.7039313702,
+        "EndingStation": 1685.219827433919,
+        "EntityAfter": 2,
+        "EntityBefore": 1,
+        "HighestDesignSpeed": 0.0,
+        "Id": 3,
+        "Length": 385.6194490191864,
+        "PIEasting": 905500.0,
+        "PINorthing": 675000.0,
+        "StartEasting": 905299.6003784147,
+        "StartNorthing": 675000.0,
+        "StartingStation": 1299.6003784147324,
+        "SubEntityCount": 3,
+        "Type": 4,
+        "SpiralIn": {
+          "A": 212.13203435596427,
+          "Compound": false,
+          "Constraint": 291,
+          "Curvature": 1,
+          "CurveGroupIndex": "",
+          "CurveGroupSubEntityIndex": "",
+          "Delta": 0.25,
+          "Direction": 1,
+          "EndDirection": 1.3207963267948966,
+          "EndEasting": 905448.6655871791,
+          "EndNorthing": 675012.4443072806,
+          "EndingStation": 1449.6003784147324,
+          "EntityAfter": 2,
+          "EntityBefore": 1,
+          "HighestDesignSpeed": 0.0,
+          "Id": 3,
+          "K": 74.84402098801812,
+          "Length": 150.0,
+          "LongTangent": 100.32935207021045,
+          "P": 3.118033793834499,
+          "PIEasting": 905500.0,
+          "PINorthing": 675000.0,
+          "RadialEasting": 905374.444331096,
+          "RadialNorthing": 675303.1180163522,
+          "RadiusIn": Infinity,
+          "RadiusOut": 300.0,
+          "SPIAngle": 2.891592653589793,
+          "SPIEasting": 905399.9297304852,
+          "SPINorthing": 675000.0,
+          "SPIStation": 1399.9297304851934,
+          "ShortTangent": 50.299547825096404,
+          "SpiralConstraint": 1025,
+          "SpiralType": 1,
+          "StartDirection": 1.5707963267948966,
+          "StartEasting": 905299.6003784147,
+          "StartNorthing": 675000.0,
+          "StartingStation": 1299.6003784147324,
+          "SubEntityCount": 0,
+          "TotalX": 149.065208764375,
+          "TotalY": 12.444307280641079,
+          "Type": 3
+        },
+        "Arc": {
+          "CenterEasting": 905374.4443994028,
+          "CenterNorthing": 675303.1180337938,
+          "ChordDirection": 1.1780972450973772,
+          "ChordLength": 85.32916619030364,
+          "Clockwise": false,
+          "Constraint": 291,
+          "CurveConstraint": 785,
+          "CurveGroupIndex": "",
+          "CurveGroupSubEntityIndex": "",
+          "DeflectedAngle": 2.356194490192345,
+          "Delta": 0.28539816339739055,
+          "EndDirection": 1.0353981633976546,
+          "EndEasting": 905527.4994573486,
+          "EndNorthing": 675045.0983654791,
+          "EndingStation": 1535.219827433919,
+          "EntityAfter": 2,
+          "EntityBefore": 1,
+          "ExternalSecant": 3.08058638871691,
+          "ExternalTangent": 43.102689541695995,
+          "GreaterThan180": false,
+          "HighestDesignSpeed": 0.0,
+          "Id": 3,
+          "Length": 85.61944901918639,
+          "MidOrdinate": 3.0492745432059962,
+          "PIEasting": 905500.0,
+          "PINorthing": 675000.0,
+          "PIStation": 1492.7030679567151,
+          "Radius": 299.99999999989217,
+          "StartDirection": 1.3207963267949498,
+          "StartEasting": 905448.6655871791,
+          "StartNorthing": 675012.4443072807,
+          "StartingStation": 1449.6003784147324,
+          "SubEntityCount": 0,
+          "Type": 2
+        },
+        "SpiralOut": {
+          "A": 212.13203435596427,
+          "Compound": false,
+          "Constraint": 291,
+          "Curvature": 2,
+          "CurveGroupIndex": "",
+          "CurveGroupSubEntityIndex": "",
+          "Delta": 0.25,
+          "Direction": 1,
+          "EndDirection": 0.7853981633974483,
+          "EndEasting": 905641.7039313702,
+          "EndNorthing": 675141.7039313702,
+          "EndingStation": 1685.219827433919,
+          "EntityAfter": 2,
+          "EntityBefore": 1,
+          "HighestDesignSpeed": 0.0,
+          "Id": 3,
+          "K": 74.84402098801812,
+          "Length": 150.0,
+          "LongTangent": 100.32935207021045,
+          "P": 3.118033793834499,
+          "PIEasting": 905500.0,
+          "PINorthing": 675000.0,
+          "RadialEasting": 905374.444460036,
+          "RadialNorthing": 675303.1180697609,
+          "RadiusIn": 300.0,
+          "RadiusOut": Infinity,
+          "SPIAngle": 2.891592653589793,
+          "SPIEasting": 905570.7603661692,
+          "SPINorthing": 675070.7603661692,
+          "SPIStation": 1585.519375258862,
+          "ShortTangent": 50.299547825096404,
+          "SpiralConstraint": 1025,
+          "SpiralType": 1,
+          "StartDirection": 1.0353981633974483,
+          "StartEasting": 905527.4994573486,
+          "StartNorthing": 675045.0983654791,
+          "StartingStation": 1535.219827433919,
+          "SubEntityCount": 0,
+          "TotalX": 149.065208764375,
+          "TotalY": 12.444307280641079,
+          "Type": 3
+        }
+      }
+    ],
+    "station_equations": [
+      {
+        "RawStationBack": 1400.0,
+        "StationAhead": 2000.0,
+        "StationBack": 1400.0,
+        "Type": 1
+      }
+    ],
+    "station_offsets": [
+      {
+        "x": 905200.0,
+        "y": 675000.0,
+        "station": 1200.0,
+        "offset": 0.0,
+        "station_string": "12+00.00"
+      },
+      {
+        "x": 905200.0,
+        "y": 675008.0,
+        "station": 1200.0,
+        "offset": -8.0,
+        "station_string": "12+00.00"
+      },
+      {
+        "x": 905200.0,
+        "y": 674992.0,
+        "station": 1200.0,
+        "offset": 8.0,
+        "station_string": "12+00.00"
+      },
+      {
+        "x": 905450.0,
+        "y": 675000.0,
+        "station": 1447.8849090543808,
+        "offset": 12.39266879396827,
+        "station_string": "20+47.88"
+      },
+      {
+        "x": 905700.0,
+        "y": 675060.0,
+        "station": 1668.9589173997392,
+        "offset": 99.0113015622318,
+        "station_string": "22+68.96"
+      },
+      {
+        "x": 905800.0,
+        "y": 675150.0,
+        "station": 1803.0182573825875,
+        "offset": 106.06601717798213,
+        "station_string": "24+03.02"
+      },
+      {
+        "x": 905900.0,
+        "y": 675260.0,
+        "station": 1951.5106814317624,
+        "offset": 98.99494936611666,
+        "station_string": "25+51.51"
+      },
+      {
+        "x": 905803.5533905933,
+        "y": 675303.5533905933,
+        "station": 1914.1095277299783,
+        "offset": 0.0,
+        "station_string": "25+14.11"
+      }
+    ],
+    "point_locations": [
+      {
+        "distance": 0.0,
+        "x": 905000.0,
+        "y": 675000.0
+      },
+      {
+        "distance": 25.0,
+        "x": 905025.0,
+        "y": 675000.0
+      },
+      {
+        "distance": 50.0,
+        "x": 905050.0,
+        "y": 675000.0
+      },
+      {
+        "distance": 75.0,
+        "x": 905075.0,
+        "y": 675000.0
+      },
+      {
+        "distance": 100.0,
+        "x": 905100.0,
+        "y": 675000.0
+      },
+      {
+        "distance": 125.0,
+        "x": 905125.0,
+        "y": 675000.0
+      },
+      {
+        "distance": 150.0,
+        "x": 905150.0,
+        "y": 675000.0
+      },
+      {
+        "distance": 175.0,
+        "x": 905175.0,
+        "y": 675000.0
+      },
+      {
+        "distance": 200.0,
+        "x": 905200.0,
+        "y": 675000.0
+      },
+      {
+        "distance": 225.0,
+        "x": 905225.0,
+        "y": 675000.0
+      },
+      {
+        "distance": 250.0,
+        "x": 905250.0,
+        "y": 675000.0
+      },
+      {
+        "distance": 275.0,
+        "x": 905275.0,
+        "y": 675000.0
+      },
+      {
+        "distance": 300.0,
+        "x": 905300.0,
+        "y": 675000.0000002363
+      },
+      {
+        "distance": 325.0,
+        "x": 905324.9998694881,
+        "y": 675000.0606898942
+      },
+      {
+        "distance": 350.0,
+        "x": 905349.9959854641,
+        "y": 675000.4741255421
+      },
+      {
+        "distance": 375.0,
+        "x": 905374.9699198094,
+        "y": 675001.5871572358
+      },
+      {
+        "distance": 400.0,
+        "x": 905399.8741297357,
+        "y": 675003.744926602
+      },
+      {
+        "distance": 425.0,
+        "x": 905424.6177193599,
+        "y": 675007.287486908
+      },
+      {
+        "distance": 450.0,
+        "x": 905449.052719533,
+        "y": 675012.5434331017
+      },
+      {
+        "distance": 475.0,
+        "x": 905472.9803464359,
+        "y": 675019.7619554361
+      },
+      {
+        "distance": 500.0,
+        "x": 905496.2240918311,
+        "y": 675028.9470898337
+      },
+      {
+        "distance": 525.0,
+        "x": 905518.6226342099,
+        "y": 675040.0350875432
+      },
+      {
+        "distance": 550.0,
+        "x": 905540.0269873242,
+        "y": 675052.9389362033
+      },
+      {
+        "distance": 575.0,
+        "x": 905560.4064741739,
+        "y": 675067.4107810174
+      },
+      {
+        "distance": 600.0,
+        "x": 905579.8635416947,
+        "y": 675083.1037369968
+      },
+      {
+        "distance": 625.0,
+        "x": 905598.5571364339,
+        "y": 675099.700855572
+      },
+      {
+        "distance": 650.0,
+        "x": 905616.685812204,
+        "y": 675116.9146390698
+      },
+      {
+        "distance": 675.0,
+        "x": 905634.4746276113,
+        "y": 675134.4802185133
+      },
+      {
+        "distance": 700.0,
+        "x": 905652.1550916188,
+        "y": 675152.1550916188
+      },
+      {
+        "distance": 725.0,
+        "x": 905669.8327611485,
+        "y": 675169.8327611485
+      },
+      {
+        "distance": 750.0,
+        "x": 905687.510430678,
+        "y": 675187.510430678
+      },
+      {
+        "distance": 775.0,
+        "x": 905705.1881002077,
+        "y": 675205.1881002077
+      },
+      {
+        "distance": 800.0,
+        "x": 905722.8657697374,
+        "y": 675222.8657697374
+      },
+      {
+        "distance": 825.0,
+        "x": 905740.5434392671,
+        "y": 675240.5434392671
+      },
+      {
+        "distance": 850.0,
+        "x": 905758.2211087968,
+        "y": 675258.2211087968
+      },
+      {
+        "distance": 875.0,
+        "x": 905775.8987783263,
+        "y": 675275.8987783263
+      },
+      {
+        "distance": 900.0,
+        "x": 905793.576447856,
+        "y": 675293.576447856
+      },
+      {
+        "distance": 925.0,
+        "x": 905811.2541173857,
+        "y": 675311.2541173857
+      },
+      {
+        "distance": 950.0,
+        "x": 905828.9317869154,
+        "y": 675328.9317869154
+      },
+      {
+        "distance": 975.0,
+        "x": 905846.6094564451,
+        "y": 675346.6094564451
+      }
+    ]
+  },
+  "design": {
+    "note": "tangent - spiral - arc - spiral - tangent, 45 deg PI, R=300 Ls=150, EPSG:2264 ftUS, one station equation",
+    "E0": 905000.0,
+    "N0": 675000.0,
+    "radius": 300.0,
+    "spiral_length": 150.0,
+    "tangent": 500.0,
+    "sta_start": 1000.0,
+    "A": [
+      905000.0,
+      675000.0
+    ],
+    "PI": [
+      905500.0,
+      675000.0
+    ],
+    "C": [
+      905853.5533905933,
+      675353.5533905933
+    ],
+    "equation": {
+      "raw": 1400.0,
+      "ahead": 2000.0
+    }
+  },
+  "landxml": {
+    "path": "alignment_spiral_c3d.xml",
+    "elements": [
+      {
+        "type": "line",
+        "length": 299.6003784147324
+      },
+      {
+        "type": "spiral",
+        "length": 150.0,
+        "radius_in": null,
+        "radius_out": 300.0,
+        "delta": 0.25,
+        "total_x": 149.065208764375,
+        "total_y": 12.444307280641079,
+        "a_value": 212.13203435596427,
+        "spiral_type": 1
+      },
+      {
+        "type": "arc",
+        "length": 85.61944901918639,
+        "radius": 299.99999999989217,
+        "delta": 0.28539816339739055,
+        "centre": [
+          905374.444331096,
+          675303.1180163522
+        ]
+      },
+      {
+        "type": "spiral",
+        "length": 150.0,
+        "radius_in": 300.0,
+        "radius_out": null,
+        "delta": 0.25,
+        "total_x": 149.065208764375,
+        "total_y": 12.444307280641079,
+        "a_value": 212.13203435596427,
+        "spiral_type": 1
+      },
+      {
+        "type": "line",
+        "length": 299.600378414714
+      }
+    ],
+    "equations": [
+      {
+        "raw": 1400.0,
+        "back": 1400.0,
+        "ahead": 2000.0,
+        "type": 1
+      }
+    ]
+  }
+}

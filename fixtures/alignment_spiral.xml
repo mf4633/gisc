@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<LandXML xmlns="http://www.landxml.org/schema/LandXML-1.2" version="1.2"
+         date="2026-09-10" time="09:00:00">
+  <Units>
+    <Imperial linearUnit="USSurveyFoot" areaUnit="squareFoot"
+              volumeUnit="cubicFeet" temperatureUnit="fahrenheit"
+              pressureUnit="inHG" angularUnit="decimal degrees"
+              directionUnit="decimal degrees"/>
+  </Units>
+  <CoordinateSystem epsgCode="2264" horizontalDatum="NAD83"
+                    horizontalCoordinateSystemName="NAD83 / North Carolina (ftUS)"/>
+  <Alignments name="Roadway">
+    <Alignment name="CL-SPIRAL" length="1335.6194" staStart="1000.0000">
+      <CoordGeom>
+        <Line>
+          <Start>675000.0000 904600.0000</Start>
+          <End>675000.0000 905000.0000</End>
+        </Line>
+        <Spiral length="150.0000" radiusStart="INF" radiusEnd="300.0000" rot="ccw" spiType="clothoid" theta="14.323945">
+          <Start>675000.0000 905000.0000</Start>
+          <PI>675000.0000 905100.3294</PI>
+          <End>675012.4443 905149.0652</End>
+        </Spiral>
+        <Curve rot="ccw" radius="300.0000">
+          <Start>675012.4443 905149.0652</Start>
+          <Center>675303.1180 905074.8440</Center>
+          <End>675150.0630 905332.8637</End>
+        </Curve>
+        <Spiral length="150.0000" radiusStart="300.0000" radiusEnd="INF" rot="ccw" spiType="clothoid" theta="14.323945">
+          <Start>675150.0630 905332.8637</Start>
+          <PI>675193.3239 905358.5257</PI>
+          <End>675289.5949 905386.7724</End>
+        </Spiral>
+        <Line>
+          <Start>675289.5949 905386.7724</Start>
+          <End>675673.4147 905499.3882</End>
+        </Line>
+      </CoordGeom>
+    </Alignment>
+  </Alignments>
+</LandXML>

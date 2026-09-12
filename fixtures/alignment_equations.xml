@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<LandXML xmlns="http://www.landxml.org/schema/LandXML-1.2" version="1.2"
+         date="2026-09-10" time="09:00:00">
+  <Units>
+    <Imperial linearUnit="USSurveyFoot" areaUnit="squareFoot"
+              volumeUnit="cubicFeet" temperatureUnit="fahrenheit"
+              pressureUnit="inHG" angularUnit="decimal degrees"
+              directionUnit="decimal degrees"/>
+  </Units>
+  <CoordinateSystem epsgCode="2264" horizontalDatum="NAD83"
+                    horizontalCoordinateSystemName="NAD83 / North Carolina (ftUS)"/>
+  <Alignments name="Roadway">
+    <Alignment name="CL-EQUATED" length="1227.2002" staStart="1000.0000">
+      <CoordGeom>
+        <Line>
+          <Start>675000.0000 905000.0000</Start>
+          <End>675000.0000 905400.0000</End>
+        </Line>
+        <Line>
+          <Start>675000.0000 905400.0000</Start>
+          <End>675150.0000 905800.0000</End>
+        </Line>
+        <Line>
+          <Start>675150.0000 905800.0000</Start>
+          <End>675150.0000 906200.0000</End>
+        </Line>
+      </CoordGeom>
+      <StaEquation staInternal="1400.0000" staBack="1400.0000" staAhead="2000.0000" desc="gap: 14+00 back = 20+00 ahead"/>
+      <StaEquation staInternal="1800.0000" staBack="2400.0000" staAhead="2100.0000" desc="overlap: 24+00 back = 21+00 ahead"/>
+    </Alignment>
+  </Alignments>
+</LandXML>
