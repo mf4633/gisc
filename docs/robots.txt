@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://mf4633.github.io/gisc/sitemap.xml
